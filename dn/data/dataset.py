@@ -18,7 +18,20 @@ class MyDS(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        return (self.samples[idx].view(1, 20, 20), self.labels[idx])
+        return (self.samples[idx], self.labels[idx])
+
+
+class ImageDataDS(MyDS):
+    def __init__(self, data_split, transform=None):
+        super().__init__(data_split.samples, data_split.labels)
+        self.transform = transform
+
+    def __getitem__(self, idx):
+        sample, label = super().__getitem__(idx)
+        sample = sample.view(1, 20, 20) / 255
+        if self.transform:
+            sample = self.transform(sample)
+        return (sample, label)
 
 
 class ImageData:
@@ -31,6 +44,7 @@ class ImageData:
         # names_test
         # dloader
         # mapping
+
         pass
 
 

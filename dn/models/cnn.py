@@ -21,12 +21,10 @@ class CNN(nn.Module):
             nn.Conv2d(16, 32, 5, 1, 2),
             nn.ReLU(),
             nn.MaxPool2d(2),
-        )  # fully connected layer, output 10 classes
-        self.out = nn.Linear(32 * 5 * 5, self.n_class)
+        )
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.conv2(x)
         x = x.view(x.size(0), -1)
-        x = self.out(x)
         return x
