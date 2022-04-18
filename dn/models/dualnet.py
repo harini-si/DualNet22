@@ -1,4 +1,10 @@
 import torch
+from torch import nn
+from dn.models.cnn import CNN
+
+n_class = 74
+SLOW_EMBEDDER = CNN
+FAST_EMBEDDER = CNN
 
 
 class SlowLearner(torch.nn.module):
@@ -7,6 +13,7 @@ class SlowLearner(torch.nn.module):
     """
 
     def __init__(self, args):
+        self.embedder = nn.Sequential(*list(SLOW_EMBEDDER(args.n_class).modules())[:-1])
         pass
 
     def forward(self, img, img_, *args, **kwargs) -> torch.Tensor:
@@ -31,17 +38,19 @@ class FastLearner(torch.nn.module):
     """
 
     def __init__(self, args):
+        self.cnn = FAST_EMBEDDER(args.n_class)
         pass
 
     def forward(self, img, *args, **kwargs) -> torch.Tensor:
         """
         Obtain representation from slow learner
         """
+        out = self.cnn(img)
         pass
 
     def losser(self, img) -> torch.Tensor:
         """
-        Returns self sup loss
+        Returns sup loss
         """
         pass
 
@@ -52,6 +61,8 @@ class DualNet(torch.nn.module):
     """
 
     def __init__(self, args):
+        self.SlowLearner = SlowLearner(args)
+        self.FastLearner = FastLearner(args)
         pass
 
     def forward(self, img, *args, **kwargs) -> torch.Tensor:
