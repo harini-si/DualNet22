@@ -4,15 +4,17 @@ import pickle
 import torch
 from torch.utils.data import DataLoader
 
+from dn.data import ImageData, MyDS
 from dn.models import DualNet
 from dn.trainer import Trainer
-from dn.utils import deterministic, get_image_data_pickle, logger, metric
+from dn.utils import deterministic, load_image_data_pickle, logger, metric
 
-args = argparse.parse_args()
+parser = argparse.ArgumentParser(description="DualNet-Image")
+args = parser.parse_args()
 
 if __name__ == "__main__":
     deterministic(args.seed)
-    data = get_image_data_pickle(args.path)
+    data = load_image_data_pickle(args.path)
     train_loader = data.dloader
     test_loader = DataLoader(
         data.test_ds, batch_size=args.test_batch_size, shuffle=False

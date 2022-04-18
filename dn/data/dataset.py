@@ -18,7 +18,7 @@ class MyDS(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        return (self.samples[idx], self.labels[idx])
+        return (self.samples[idx].view(1, 20, 20), self.labels[idx])
 
 
 class ImageData:
