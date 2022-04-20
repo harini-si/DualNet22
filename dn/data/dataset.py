@@ -6,7 +6,7 @@ import torch
 from matplotlib import pyplot as plt
 from PIL import Image
 from PIL.ImageOps import invert
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, TensorDataset
 
 
 class MyDS(Dataset):
@@ -125,3 +125,21 @@ class MarketCLTasks:
             ["(0.02, 0.01)", "(0.01, 0.005)", "(0.01, 0.02)", "(0.005, 0.01)"]
         ]
         return dftrain, label
+
+
+class MetaLoader(object):
+    def __init__(self, taskset, args, train=True):
+        bs = args.batch_size if train else 64
+
+        self.tasks = taskset
+        self.loaders = []
+        for (X, X_), y in self.tasks:
+            ds = TensorDataset(X, X_, y)
+            dl = DataLoader(ds, batch_size=bs, shuffle=True, pin_memory=False)
+            self.loaders.append(dl)
+
+    def __getitem__(self, idx):
+        return self.loaders[idx]
+
+    def __len__(self):
+        return len(self.loaders)

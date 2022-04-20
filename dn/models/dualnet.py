@@ -78,6 +78,7 @@ class DualNet(torch.nn.Module):
         super(DualNet, self).__init__()
         self.SlowLearner = SlowLearner(args)
         self.FastLearner = FastLearner(args)
+        # self.mem=
         pass
 
     def forward(self, img, *args, **kwargs) -> torch.Tensor:
@@ -89,7 +90,8 @@ class DualNet(torch.nn.Module):
         self.feature_adaption()
         pass
 
-    def memory_consolidation(self):
+    def memory_consolidation(self, img, label):
+
         raise NotImplementedError
 
     def feature_adaption(self):
