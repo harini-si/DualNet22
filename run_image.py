@@ -112,7 +112,7 @@ if __name__ == "__main__":
                     for _ in range(args.inner_steps):
                         model.zero_grad()
                         if task > 0:
-                            xx, yy, target, mask = model.memory_sampling(
+                            xx, yy, target, mask = model.memory_consolidation(
                                 task, args.batch_size
                             )
                             x1, x2 = model.barlow_augment(xx)
@@ -138,7 +138,7 @@ if __name__ == "__main__":
                     loss1 = CLoss(pred[:, offset1:offset2], y - offset1)
                     loss2, loss3 = 0, 0
                     if task > 0:
-                        xx, yy, target, mask = model.memory_sampling(task)
+                        xx, yy, target, mask = model.memory_consolidation(task)
                         xx = model.VCTransform()(xx)
                         pred = torch.gather(model(xx), 1, mask)
                         loss2 += CLoss(pred, yy)
