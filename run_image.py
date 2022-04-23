@@ -1,4 +1,5 @@
 import argparse
+import logging
 from copy import deepcopy
 
 import learn2learn as l2l
@@ -10,6 +11,13 @@ from dn.data import ContinousNWays, ImageData, ImageDataDS, MetaLoader, MyDS
 from dn.models import DualNet
 from dn.utils import deterministic, load_image_data_pickle
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+    filename="./logs/log.txt",
+    filemode="a+",
+)
 parser = argparse.ArgumentParser(description="DualNet-Image")
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--n_epochs", type=int, default=100)
@@ -54,7 +62,7 @@ if __name__ == "__main__":
     train_data, test_data = l2l.data.MetaDataset(train_data), l2l.data.MetaDataset(
         test_data
     )
-
+    logging.info("data loaded")
     transforms = [
         ContinousNWays(train_data, args.n_ways, args),
         l2l.data.transforms.LoadData(train_data),
@@ -71,15 +79,18 @@ if __name__ == "__main__":
     ssl_opt = torch.optim.SGD(model.SlowLearner.parameters(), lr=args.ssl_lr)
 
     for task, train_loader in enumerate(MetaLoader(train_taskset, args, train=True)):
+        logging.info("Running Task {}".format(task))
         model.train()
         if task > 0:
+            logging.info("Claculating Mem Features for task {}".format(task))
             offset1, offset2 = model.compute_offsets(task)
             x = model.VCTransform()(model.memx[task])
             out = model(x, task)
             model.mem_feat[task] = F.softmax(
                 out[:, offset1:offset2] / model.temp, dim=1
             ).data.clone()
-        for _ in range(args.n_epochs):
+        for epoch in range(args.n_epochs):
+            logging.info("Epoch {}".format(epoch))
             for x, y in train_loader:
                 endcnt = min(model.mem_cnt + args.batch_size, model.n_memories)
                 effbsz = endcnt - model.mem_cnt
