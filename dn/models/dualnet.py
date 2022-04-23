@@ -1,12 +1,12 @@
 import torch
 from torch import nn
 
-from dn.data import BarlowAugment
-from dn.models.cnn import CNN
+from dn.data import BarlowAugment, VCTransform
+from dn.models.extractor import VCResNetFast, VCResNetSlow
 
 n_class = 74
-SLOW_EMBEDDER = CNN
-FAST_EMBEDDER = CNN
+SLOW_EMBEDDER = VCResNetSlow
+FAST_EMBEDDER = VCResNetFast
 
 
 class SlowLearner(torch.nn.Module):
@@ -17,20 +17,25 @@ class SlowLearner(torch.nn.Module):
     def __init__(self, args):
         super(SlowLearner, self).__init__()
         self.args = args
-        self.embedder = SLOW_EMBEDDER(args.n_class)
+        self.embedder = SLOW_EMBEDDER(args)
         self.augmenter = BarlowAugment()
-        pass
 
-    def forward(self, img, img_, type="BarlowTwins") -> torch.Tensor:
+    def forward(self, input, type="BarlowTwins", return_feat=False) -> torch.Tensor:
         """
         Obtain representation from slow learner
         """
-        if type == "BarlowTwins":
-            img, img_ = self.embedder(img), self.embedder(img_)
-            return self.barlow_twins_losser(img, img_)
+        if return_feat:
+            feat = self.embedder(input, return_feat=True)
+            return feat
+
         else:
-            raise NotImplementedError
-        pass
+            emb, emb_ = self.embedder(input[0], return_feat=False), self.embedder(
+                input[1], return_feat=False
+            )
+            if type == "BarlowTwins":
+                return self.barlow_twins_losser(emb, emb_)
+            else:
+                raise NotImplementedError
 
     def barlow_twins_losser(self, z1, z2):
         """
@@ -57,15 +62,14 @@ class FastLearner(torch.nn.Module):
 
     def __init__(self, args):
         super(FastLearner, self).__init__()
-        self.embedder = FAST_EMBEDDER(args.n_class)
-        self.fc = nn.Linear(args.emb, args.n_class)
+        self.args = args
+        self.embedder = FAST_EMBEDDER(args)
 
-    def forward(self, img) -> torch.Tensor:
+    def forward(self, img, feat) -> torch.Tensor:
         """
         Obtain representation from slow learner
         """
-        emb = self.embedder(img)
-        out = self.fc(emb)
+        out = self.embedder(img, feat)
         return out
 
 
@@ -76,23 +80,60 @@ class DualNet(torch.nn.Module):
 
     def __init__(self, args):
         super(DualNet, self).__init__()
+        self.reg = args.memory_strength
+        self.temp = args.temperature
+        self.beta = args.beta
+        self.nc_per_task = int(args.n_class // args.n_tasks)
+
+        # setup memories
+        self.n_memories = args.n_memories
+        self.mem_cnt = 0
+        self.memx = torch.FloatTensor(args.n_tasks, self.n_memories, 3, 128, 128)
+        self.memy = torch.LongTensor(args.n_tasks, self.n_memories)
+        self.mem_feat = torch.FloatTensor(
+            args.n_tasks, self.n_memories, self.nc_per_task
+        )
+        self.mem = {}
+
+        self.bsz = args.batch_size
+        self.n_class = args.n_class
+        self.rsz = args.replay_batch_size
+
+        self.inner_steps = args.inner_steps
+        self.n_outer = args.n_outer
+
         self.SlowLearner = SlowLearner(args)
         self.FastLearner = FastLearner(args)
-        # self.mem=
-        pass
 
-    def forward(self, img, *args, **kwargs) -> torch.Tensor:
+        self.vctransform = VCTransform()
+        self.barlow_augment = BarlowAugment()
+
+    def compute_offsets(self, task):
+        return self.nc_per_task * task, self.nc_per_task * (task + 1)
+
+    def forward(self, img, task) -> torch.Tensor:
         """
-        DualNet train step
+        Fast Learner Inference
         """
-        pass
-        self.memory_consolidation()
-        self.feature_adaption()
-        pass
+        feat = self.SlowLearner(img, return_feat=True)
+        out = self.FastLearner(img, feat)
 
-    def memory_consolidation(self, img, label):
+        offset1, offset2 = self.compute_offsets(task)
+        if offset1 > 0:
+            out[:, :offset1].data.fill_(-10e10)
+        if offset2 < self.n_outputs:
+            out[:, int(offset2) : self.n_outputs].data.fill_(-10e10)
 
-        raise NotImplementedError
+        return out
 
-    def feature_adaption(self):
-        raise NotImplementedError
+    def memory_consolidation(self, task):
+        t = torch.randint(0, task, (self.bsz,))
+        x = torch.randint(0, self.n_memories, (self.bsz,))
+        offsets = torch.tensor([self.compute_offsets(i) for i in t])
+        xx = self.memx[t, x]
+        yy = self.memy[t, x] - offsets[:, 0]
+        feat = self.mem_feat[t, x]
+        mask = torch.zeros(self.bsz, self.nc_per_task)
+        for j in range(self.bsz):
+            mask[j] = torch.arange(offsets[j][0], offsets[j][1])
+        return xx, yy, feat, mask.long().cuda()

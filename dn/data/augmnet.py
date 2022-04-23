@@ -29,6 +29,15 @@ class Solarization(object):
             return img
 
 
+VCTransform = transforms.Compose(
+    [
+        transforms.ToPILImage(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[MEAN], std=[STD]),
+    ]
+)
+
+
 class BarlowAugment:
     def __init__(self):
         self.transform = transforms.Compose(
@@ -44,15 +53,6 @@ class BarlowAugment:
             ]
         )
 
-        self.transform_weak = transforms.Compose(
-            [
-                transforms.ToPILImage(),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomResizedCrop(20, interpolation=Image.BICUBIC),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[MEAN], std=[STD]),
-            ]
-        )
         self.transform_prime = transforms.Compose(
             [
                 transforms.ToPILImage(),
