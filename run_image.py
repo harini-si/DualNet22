@@ -51,10 +51,12 @@ parser.add_argument(
 )
 parser.add_argument("--replay_batch_size", type=int, default=10)
 parser.add_argument("--n_outer", type=int, default=1)
+parser.add_argument("--device", type=str, default="cpu")
 args = parser.parse_args()
 
 if __name__ == "__main__":
     deterministic(args)
+    device = torch.device(args.device)
     data = load_image_data_pickle(args.path)
     train_data, test_data = ImageDataDS(data.train_ds, transform=None), ImageDataDS(
         data.test_ds
@@ -71,7 +73,7 @@ if __name__ == "__main__":
         train_data, transforms, num_tasks=args.n_class // args.n_ways
     )
 
-    model = DualNet(args)
+    model = DualNet(args).to(device)
     CLoss = torch.nn.CrossEntropyLoss()
     KLLoss = torch.nn.KLDivLoss()
 
@@ -82,9 +84,9 @@ if __name__ == "__main__":
         logging.info("Running Task {}".format(task))
         model.train()
         if task > 0:
-            logging.info("Claculating Mem Features for task {}".format(task))
+            # logging.info("Claculating Mem Features for task {}".format(task))
             offset1, offset2 = model.compute_offsets(task)
-            x = model.VCTransform()(model.memx[task])
+            x = model.VCTransform(model.memx[task])
             out = model(x, task)
             model.mem_feat[task] = F.softmax(
                 out[:, offset1:offset2] / model.temp, dim=1
@@ -92,9 +94,13 @@ if __name__ == "__main__":
         for epoch in range(args.n_epochs):
             logging.info("Epoch {}".format(epoch))
             for i, (x, y) in enumerate(train_loader):
-                logging.info("Running step {}/{}".format(i, len(train_loader)))
+                logging.info("Running step {}/{}".format(i, len(train_loader) - 1))
+                x, y = x.to(device), y.to(device)
                 endcnt = min(model.mem_cnt + args.batch_size, model.n_memories)
                 effbsz = endcnt - model.mem_cnt
+                if effbsz > x.size(0):
+                    effbsz = x.size(0)
+                    endcnt = model.mem_cnt + effbsz
                 model.memx[task, model.mem_cnt : endcnt].copy_(x.data[:effbsz])
                 model.memy[task, model.mem_cnt : endcnt].copy_(y.data[:effbsz])
                 model.mem_cnt += effbsz
