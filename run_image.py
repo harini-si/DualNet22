@@ -137,8 +137,8 @@ if __name__ == "__main__":
                     loss2, loss3 = 0, 0
                     if task > 0:
                         xx, yy, target, mask = model.memory_consolidation(task)
-                        xx = model.VCTransform()(xx)
-                        pred = torch.gather(model(xx), 1, mask)
+                        xx = model.VCTransform(xx)
+                        pred = torch.gather(model(xx, fast=True), 1, mask)
                         loss2 += CLoss(pred, yy)
                         loss3 = model.reg * KLLoss(
                             F.log_softmax(pred / model.temp, dim=1), target
