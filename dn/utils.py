@@ -1,3 +1,4 @@
+import pickle
 import random
 
 import numpy as np
@@ -13,3 +14,9 @@ def deterministic(args):
 
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
+
+
+def load_image_data_pickle(path):
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+    return data

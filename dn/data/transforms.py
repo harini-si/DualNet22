@@ -5,16 +5,15 @@ from learn2learn.data.transforms import TaskTransform
 
 
 class ContinousNWays(TaskTransform):
-    def __init__(self, dataset, n_ways):
+    def __init__(self, dataset, n_ways, args):
         super(ContinousNWays, self).__init__(dataset)
         self.n = n_ways
         self.indices_to_labels = dict(dataset.indices_to_labels)
         self.id = 0
-        self.labels = list(set(dataset.indices_to_labels.values()))
+        self.labels = list(range(args.n_class))
 
     def new_task(self):
         if self.id % 14 == 0:
-            random.shuffle(self.labels)
             self.id = 0
         task_description = []
         labels_to_indices = dict(self.dataset.labels_to_indices)

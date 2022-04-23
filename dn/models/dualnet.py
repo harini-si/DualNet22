@@ -47,8 +47,6 @@ class SlowLearner(torch.nn.Module):
         N, D = z_a.size(0), z_a.size(1)
         c_ = torch.mm(z_a.T, z_b) / N
         diag = torch.eye(D)
-        if self.args.device == "cuda":
-            diag = diag.cuda()
         c_diff = (c_ - diag).pow(2)
         c_diff[~torch.eye(D, dtype=bool)] *= 2e-3
         loss = c_diff.sum()
@@ -88,7 +86,7 @@ class DualNet(torch.nn.Module):
         # setup memories
         self.n_memories = args.n_memories
         self.mem_cnt = 0
-        self.memx = torch.FloatTensor(args.n_tasks, self.n_memories, 3, 128, 128)
+        self.memx = torch.FloatTensor(args.n_tasks, self.n_memories, 1, 20, 20)
         self.memy = torch.LongTensor(args.n_tasks, self.n_memories)
         self.mem_feat = torch.FloatTensor(
             args.n_tasks, self.n_memories, self.nc_per_task
@@ -105,7 +103,7 @@ class DualNet(torch.nn.Module):
         self.SlowLearner = SlowLearner(args)
         self.FastLearner = FastLearner(args)
 
-        self.vctransform = VCTransform()
+        self.VCTransform = VCTransform
         self.barlow_augment = BarlowAugment()
 
     def compute_offsets(self, task):
@@ -121,8 +119,8 @@ class DualNet(torch.nn.Module):
         offset1, offset2 = self.compute_offsets(task)
         if offset1 > 0:
             out[:, :offset1].data.fill_(-10e10)
-        if offset2 < self.n_outputs:
-            out[:, int(offset2) : self.n_outputs].data.fill_(-10e10)
+        if offset2 < self.n_class:
+            out[:, int(offset2) : self.n_class].data.fill_(-10e10)
 
         return out
 
