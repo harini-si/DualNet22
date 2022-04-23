@@ -16,7 +16,7 @@ logging.basicConfig(
     format="%(asctime)s %(message)s",
     datefmt="%m/%d/%Y %I:%M:%S %p",
     filename="./logs/log.txt",
-    filemode="a+",
+    filemode="w+",
 )
 parser = argparse.ArgumentParser(description="DualNet-Image")
 parser.add_argument("--batch_size", type=int, default=32)
