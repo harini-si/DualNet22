@@ -1,11 +1,13 @@
 import argparse
 import logging
+import time
 from copy import deepcopy
 
 import learn2learn as l2l
 import torch
 import torch.nn.functional as F
 from learn2learn.data import TaskDataset
+from torch.utils.tensorboard import SummaryWriter
 
 from dn.data import ContinousNWays, ImageData, ImageDataDS, MetaLoader, MyDS
 from dn.models import DualNet
@@ -18,10 +20,9 @@ logging.basicConfig(
     filename="./logs/log.txt",
     filemode="w+",
 )
-from torch.utils.tensorboard import SummaryWriter
+
 
 # default `log_dir` is "runs" - we'll be more specific here
-writer = SummaryWriter("runs/test_1")
 parser = argparse.ArgumentParser(description="DualNet-Image")
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--n_epochs", type=int, default=100)
@@ -59,6 +60,7 @@ parser.add_argument("--device", type=str, default="cpu")
 args = parser.parse_args()
 
 if __name__ == "__main__":
+    writer = SummaryWriter(f"runs/test_1_{time.time()}")
     deterministic(args)
     device = torch.device(args.device)
     data = load_image_data_pickle(args.path)
@@ -86,7 +88,6 @@ if __name__ == "__main__":
 
     opt = torch.optim.SGD(model.parameters(), lr=args.lr)
     ssl_opt = torch.optim.SGD(model.SlowLearner.parameters(), lr=args.ssl_lr)
-
     for task, train_loader in enumerate(MetaLoader(train_taskset, args, train=True)):
         logging.info("Running Task {}".format(task))
         model.train()
@@ -126,9 +127,8 @@ if __name__ == "__main__":
                         SSLLoss = model.SlowLearner((x1, x2))
                         SSLLoss.backward()
                         ssl_opt.step()
-                        SSL_loss += SSLLoss.item()
                         writer.add_scalar(
-                            "SSL loss", SSL_loss, epoch * len(train_loader) + i
+                            "SSL loss", SSLLoss.item(), epoch * len(train_loader) + i
                         )
 
                     weights_after = model.state_dict()
@@ -157,9 +157,8 @@ if __name__ == "__main__":
                         correct.item() / total,
                         epoch * len(train_loader) + i,
                     )
-                    running_loss += loss1.item()
                     writer.add_scalar(
-                        "training loss", running_loss, epoch * len(train_loader) + i
+                        "training loss", loss1.item(), epoch * len(train_loader) + i
                     )
                     loss2, loss3 = 0, 0
                     if task > 0:
@@ -171,9 +170,8 @@ if __name__ == "__main__":
                             F.log_softmax(pred / model.temp, dim=1), target
                         )
                     loss = loss1 + loss2 + loss3
-                    running_loss1 += loss.item()
                     writer.add_scalar(
-                        "final loss", running_loss1, epoch * len(train_loader) + i
+                        "final loss", loss.item(), epoch * len(train_loader) + i
                     )
                     loss.backward()
                     opt.step()
@@ -183,12 +181,17 @@ if __name__ == "__main__":
         for task_t, te_loader in enumerate(MetaLoader(test_taskset, args, train=False)):
             if task_t > task:
                 break
-
+            test_loss = 0
             for data, target in te_loader:
-                data, target = data.cuda(), target.cuda()
+                data, target = data, target
                 logits = model(data, task_t)
-                loss = F.cross_entropy(logits, target)
+                loss = CLoss(logits, target)
+
+                writer.add_scalar("test loss", loss.item(), epoch * len(te_loader) + i)
                 pred = logits.argmax(dim=1, keepdim=True)
+                print(target)
+                print(pred)
                 correct = pred.eq(target.view_as(pred)).sum().item()
+
             acc = correct / len(data)
             logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
