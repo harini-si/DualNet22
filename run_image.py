@@ -94,7 +94,6 @@ if __name__ == "__main__":
         for epoch in range(args.n_epochs):
             logging.info("Epoch {}".format(epoch))
             for i, (x, y) in enumerate(train_loader):
-                logging.info("Running step {}/{}".format(i, len(train_loader) - 1))
                 x, y = x.to(device), y.to(device)
                 endcnt = min(model.mem_cnt + args.batch_size, model.n_memories)
                 effbsz = endcnt - model.mem_cnt
