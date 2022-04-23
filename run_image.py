@@ -112,9 +112,7 @@ if __name__ == "__main__":
                     for _ in range(args.inner_steps):
                         model.zero_grad()
                         if task > 0:
-                            xx, yy, target, mask = model.memory_consolidation(
-                                task, args.batch_size
-                            )
+                            xx, yy, target, mask = model.memory_consolidation(task)
                             x1, x2 = model.barlow_augment(xx)
                         else:
                             x1, x2 = model.barlow_augment(x)

@@ -132,7 +132,7 @@ class DualNet(torch.nn.Module):
         x = torch.randint(0, self.n_memories, (self.bsz,))
         offsets = torch.tensor([self.compute_offsets(i) for i in t])
         xx = self.memx[t, x]
-        yy = self.memy[t, x] - offsets[:, 0]
+        yy = self.memy[t, x] - offsets[:, 0].to(self.args.device)
         feat = self.mem_feat[t, x]
         mask = torch.zeros(self.bsz, self.nc_per_task)
         for j in range(self.bsz):
