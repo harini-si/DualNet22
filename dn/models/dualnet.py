@@ -112,12 +112,14 @@ class DualNet(torch.nn.Module):
     def compute_offsets(self, task):
         return self.nc_per_task * task, self.nc_per_task * (task + 1)
 
-    def forward(self, img, task) -> torch.Tensor:
+    def forward(self, img, task, fast=False) -> torch.Tensor:
         """
         Fast Learner Inference
         """
         feat = self.SlowLearner(img, return_feat=True)
         out = self.FastLearner(img, feat)
+        if fast:
+            return out
 
         offset1, offset2 = self.compute_offsets(task)
         if offset1 > 0:
