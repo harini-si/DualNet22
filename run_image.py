@@ -19,10 +19,10 @@ logging.basicConfig(
     filemode="w+",
 )
 parser = argparse.ArgumentParser(description="DualNet-Image")
-parser.add_argument("--batch_size", type=int, default=32)
-parser.add_argument("--n_epochs", type=int, default=100)
-parser.add_argument("--lr", type=float, default=0.001)
-parser.add_argument("--ssl_lr", type=float, default=0.001)
+parser.add_argument("--batch_size", type=int, default=16)
+parser.add_argument("--n_epochs", type=int, default=2)
+parser.add_argument("--lr", type=float, default=0.03)
+parser.add_argument("--ssl_lr", type=float, default=0.0003)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--path", type=str, default="./data/image_data.pickle")
 parser.add_argument("--n_ways", type=int, default=5)
@@ -33,16 +33,16 @@ parser.add_argument(
 )
 parser.add_argument(
     "--memory_strength",
-    default=1.0,
+    default=10,
     type=float,
     help="memory strength (meaning depends on memory)",
 )
 parser.add_argument("--reg", default=1.0, type=float)
-parser.add_argument("--inner_steps", type=int, default=1)
+parser.add_argument("--inner_steps", type=int, default=2)
 parser.add_argument(
-    "--temperature", type=float, default=1.0, help="temperature for distilation"
+    "--temperature", type=float, default=2.0, help="temperature for distilation"
 )
-parser.add_argument("--beta", type=float, default=0.3)
+parser.add_argument("--beta", type=float, default=0.05)
 parser.add_argument(
     "--save_path",
     type=str,
@@ -50,7 +50,7 @@ parser.add_argument(
     help="save models at the end of training",
 )
 parser.add_argument("--replay_batch_size", type=int, default=10)
-parser.add_argument("--n_outer", type=int, default=1)
+parser.add_argument("--n_outer", type=int, default=2)
 parser.add_argument("--device", type=str, default="cpu")
 args = parser.parse_args()
 
