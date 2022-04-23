@@ -18,11 +18,15 @@ logging.basicConfig(
     filename="./logs/log.txt",
     filemode="w+",
 )
+from torch.utils.tensorboard import SummaryWriter
+
+# default `log_dir` is "runs" - we'll be more specific here
+writer = SummaryWriter("runs/test_1")
 parser = argparse.ArgumentParser(description="DualNet-Image")
-parser.add_argument("--batch_size", type=int, default=16)
-parser.add_argument("--n_epochs", type=int, default=2)
-parser.add_argument("--lr", type=float, default=0.03)
-parser.add_argument("--ssl_lr", type=float, default=0.0003)
+parser.add_argument("--batch_size", type=int, default=32)
+parser.add_argument("--n_epochs", type=int, default=100)
+parser.add_argument("--lr", type=float, default=0.001)
+parser.add_argument("--ssl_lr", type=float, default=0.001)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--path", type=str, default="./data/image_data.pickle")
 parser.add_argument("--n_ways", type=int, default=5)
@@ -33,16 +37,16 @@ parser.add_argument(
 )
 parser.add_argument(
     "--memory_strength",
-    default=10,
+    default=1.0,
     type=float,
     help="memory strength (meaning depends on memory)",
 )
 parser.add_argument("--reg", default=1.0, type=float)
-parser.add_argument("--inner_steps", type=int, default=2)
+parser.add_argument("--inner_steps", type=int, default=1)
 parser.add_argument(
-    "--temperature", type=float, default=2.0, help="temperature for distilation"
+    "--temperature", type=float, default=1.0, help="temperature for distilation"
 )
-parser.add_argument("--beta", type=float, default=0.05)
+parser.add_argument("--beta", type=float, default=0.3)
 parser.add_argument(
     "--save_path",
     type=str,
@@ -50,7 +54,7 @@ parser.add_argument(
     help="save models at the end of training",
 )
 parser.add_argument("--replay_batch_size", type=int, default=10)
-parser.add_argument("--n_outer", type=int, default=2)
+parser.add_argument("--n_outer", type=int, default=1)
 parser.add_argument("--device", type=str, default="cpu")
 args = parser.parse_args()
 
@@ -111,6 +115,7 @@ if __name__ == "__main__":
 
                 for j in range(args.n_outer):
                     weights_before = deepcopy(model.state_dict())
+                    SSL_loss = 0
                     for _ in range(args.inner_steps):
                         model.zero_grad()
                         if task > 0:
@@ -121,6 +126,10 @@ if __name__ == "__main__":
                         SSLLoss = model.SlowLearner((x1, x2))
                         SSLLoss.backward()
                         ssl_opt.step()
+                        SSL_loss += SSLLoss.item()
+                        writer.add_scalar(
+                            "SSL loss", SSL_loss, epoch * len(train_loader) + i
+                        )
 
                     weights_after = model.state_dict()
                     new_params = {
@@ -129,13 +138,29 @@ if __name__ == "__main__":
                         for name in weights_before.keys()
                     }
                     model.load_state_dict(new_params)
-
+                running_loss = 0
+                running_loss1 = 0
+                correct = 0
+                total = 0
                 for _ in range(args.inner_steps):
                     model.zero_grad()
                     x = model.VCTransform(x)
                     offset1, offset2 = model.compute_offsets(task)
                     pred = model(x, task)
                     loss1 = CLoss(pred[:, offset1:offset2], y - offset1)
+                    correct += torch.sum(
+                        torch.argmax(pred[:, offset1:offset2], dim=1) == y - offset1
+                    )
+                    total += y.size(0)
+                    writer.add_scalar(
+                        "training acc",
+                        correct.item() / total,
+                        epoch * len(train_loader) + i,
+                    )
+                    running_loss += loss1.item()
+                    writer.add_scalar(
+                        "training loss", running_loss, epoch * len(train_loader) + i
+                    )
                     loss2, loss3 = 0, 0
                     if task > 0:
                         xx, yy, target, mask = model.memory_consolidation(task)
@@ -146,20 +171,24 @@ if __name__ == "__main__":
                             F.log_softmax(pred / model.temp, dim=1), target
                         )
                     loss = loss1 + loss2 + loss3
+                    running_loss1 += loss.item()
+                    writer.add_scalar(
+                        "final loss", running_loss1, epoch * len(train_loader) + i
+                    )
                     loss.backward()
                     opt.step()
+
         model.eval()
         mode = "test"
         for task_t, te_loader in enumerate(MetaLoader(test_taskset, args, train=False)):
             if task_t > task:
                 break
-            correct, total = 0, 0
+
             for data, target in te_loader:
                 data, target = data.cuda(), target.cuda()
                 logits = model(data, task_t)
                 loss = F.cross_entropy(logits, target)
                 pred = logits.argmax(dim=1, keepdim=True)
-                correct += pred.eq(target.view_as(pred)).sum().item()
-                total += len(data)
-            acc = correct / total
+                correct = pred.eq(target.view_as(pred)).sum().item()
+            acc = correct / len(data)
             logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
