@@ -78,6 +78,7 @@ class DualNet(torch.nn.Module):
 
     def __init__(self, args):
         super(DualNet, self).__init__()
+        self.args = args
         self.reg = args.memory_strength
         self.temp = args.temperature
         self.beta = args.beta
