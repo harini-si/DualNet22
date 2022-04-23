@@ -72,6 +72,10 @@ if __name__ == "__main__":
     train_taskset = TaskDataset(
         train_data, transforms, num_tasks=args.n_class // args.n_ways
     )
+    test_taskset = TaskDataset(
+        test_data, transforms, num_tasks=args.n_class // args.n_ways
+    )
+
 
     model = DualNet(args).to(device)
     CLoss = torch.nn.CrossEntropyLoss()
@@ -145,3 +149,16 @@ if __name__ == "__main__":
                     loss = loss1 + loss2 + loss3
                     loss.backward()
                     opt.step()
+        model.eval()
+        mode='test'
+        for task_t, te_loader in enumerate(MetaLoader(test_taskset, args, train=False)):
+            if task_t > task: break
+            
+            for data, target in te_loader:
+                data, target = data.cuda(), target.cuda()
+                logits = model(data, task_t)
+                loss = F.cross_entropy(logits, target)
+                pred = logits.argmax(dim=1, keepdim=True)
+                correct = pred.eq(target.view_as(pred)).sum().item()
+                acc = correct / len(data)
+                logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
