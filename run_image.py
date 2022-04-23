@@ -16,7 +16,7 @@ logging.basicConfig(
     format="%(asctime)s %(message)s",
     datefmt="%m/%d/%Y %I:%M:%S %p",
     filename="./logs/log.txt",
-    filemode="a+",
+    filemode="w+",
 )
 parser = argparse.ArgumentParser(description="DualNet-Image")
 parser.add_argument("--batch_size", type=int, default=32)
@@ -51,10 +51,12 @@ parser.add_argument(
 )
 parser.add_argument("--replay_batch_size", type=int, default=10)
 parser.add_argument("--n_outer", type=int, default=1)
+parser.add_argument("--device", type=str, default="cpu")
 args = parser.parse_args()
 
 if __name__ == "__main__":
     deterministic(args)
+    device = torch.device(args.device)
     data = load_image_data_pickle(args.path)
     train_data, test_data = ImageDataDS(data.train_ds, transform=None), ImageDataDS(
         data.test_ds
@@ -70,8 +72,12 @@ if __name__ == "__main__":
     train_taskset = TaskDataset(
         train_data, transforms, num_tasks=args.n_class // args.n_ways
     )
+    test_taskset = TaskDataset(
+        test_data, transforms, num_tasks=args.n_class // args.n_ways
+    )
 
-    model = DualNet(args)
+
+    model = DualNet(args).to(device)
     CLoss = torch.nn.CrossEntropyLoss()
     KLLoss = torch.nn.KLDivLoss()
 
@@ -82,18 +88,22 @@ if __name__ == "__main__":
         logging.info("Running Task {}".format(task))
         model.train()
         if task > 0:
-            logging.info("Claculating Mem Features for task {}".format(task))
+            # logging.info("Claculating Mem Features for task {}".format(task))
             offset1, offset2 = model.compute_offsets(task)
-            x = model.VCTransform()(model.memx[task])
+            x = model.VCTransform(model.memx[task])
             out = model(x, task)
             model.mem_feat[task] = F.softmax(
                 out[:, offset1:offset2] / model.temp, dim=1
             ).data.clone()
         for epoch in range(args.n_epochs):
             logging.info("Epoch {}".format(epoch))
-            for x, y in train_loader:
+            for i, (x, y) in enumerate(train_loader):
+                x, y = x.to(device), y.to(device)
                 endcnt = min(model.mem_cnt + args.batch_size, model.n_memories)
                 effbsz = endcnt - model.mem_cnt
+                if effbsz > x.size(0):
+                    effbsz = x.size(0)
+                    endcnt = model.mem_cnt + effbsz
                 model.memx[task, model.mem_cnt : endcnt].copy_(x.data[:effbsz])
                 model.memy[task, model.mem_cnt : endcnt].copy_(y.data[:effbsz])
                 model.mem_cnt += effbsz
@@ -105,9 +115,7 @@ if __name__ == "__main__":
                     for _ in range(args.inner_steps):
                         model.zero_grad()
                         if task > 0:
-                            xx, yy, target, mask = model.memory_sampling(
-                                task, args.batch_size
-                            )
+                            xx, yy, target, mask = model.memory_consolidation(task)
                             x1, x2 = model.barlow_augment(xx)
                         else:
                             x1, x2 = model.barlow_augment(x)
@@ -131,9 +139,9 @@ if __name__ == "__main__":
                     loss1 = CLoss(pred[:, offset1:offset2], y - offset1)
                     loss2, loss3 = 0, 0
                     if task > 0:
-                        xx, yy, target, mask = model.memory_sampling(task)
-                        xx = model.VCTransform()(xx)
-                        pred = torch.gather(model(xx), 1, mask)
+                        xx, yy, target, mask = model.memory_consolidation(task)
+                        xx = model.VCTransform(xx)
+                        pred = torch.gather(model(xx, task=None, fast=True), 1, mask)
                         loss2 += CLoss(pred, yy)
                         loss3 = model.reg * KLLoss(
                             F.log_softmax(pred / model.temp, dim=1), target
@@ -141,3 +149,16 @@ if __name__ == "__main__":
                     loss = loss1 + loss2 + loss3
                     loss.backward()
                     opt.step()
+        model.eval()
+        mode='test'
+        for task_t, te_loader in enumerate(MetaLoader(test_taskset, args, train=False)):
+            if task_t > task: break
+            
+            for data, target in te_loader:
+                data, target = data.cuda(), target.cuda()
+                logits = model(data, task_t)
+                loss = F.cross_entropy(logits, target)
+                pred = logits.argmax(dim=1, keepdim=True)
+                correct = pred.eq(target.view_as(pred)).sum().item()
+                acc = correct / len(data)
+                logging.info("Task {} Acc: {:.4f}".format(task_t, acc))

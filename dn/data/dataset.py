@@ -57,7 +57,7 @@ class MetaLoader(object):
         self.loaders = []
         for X, y in self.tasks:
             ds = TensorDataset(X, y)
-            dl = DataLoader(ds, batch_size=bs, shuffle=True, pin_memory=False)
+            dl = DataLoader(ds, batch_size=bs, shuffle=True, pin_memory=False, drop_last=True)
             self.loaders.append(dl)
 
     def __getitem__(self, idx):

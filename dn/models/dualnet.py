@@ -46,7 +46,7 @@ class SlowLearner(torch.nn.Module):
         z_b = (z2 - z2.mean(0)) / z2.std(0)
         N, D = z_a.size(0), z_a.size(1)
         c_ = torch.mm(z_a.T, z_b) / N
-        diag = torch.eye(D)
+        diag = torch.eye(D).to(self.args.device)
         c_diff = (c_ - diag).pow(2)
         c_diff[~torch.eye(D, dtype=bool)] *= 2e-3
         loss = c_diff.sum()
@@ -78,6 +78,7 @@ class DualNet(torch.nn.Module):
 
     def __init__(self, args):
         super(DualNet, self).__init__()
+        self.args = args
         self.reg = args.memory_strength
         self.temp = args.temperature
         self.beta = args.beta
@@ -86,11 +87,13 @@ class DualNet(torch.nn.Module):
         # setup memories
         self.n_memories = args.n_memories
         self.mem_cnt = 0
-        self.memx = torch.FloatTensor(args.n_tasks, self.n_memories, 1, 20, 20)
-        self.memy = torch.LongTensor(args.n_tasks, self.n_memories)
+        self.memx = torch.FloatTensor(args.n_tasks, self.n_memories, 1, 20, 20).to(
+            self.args.device
+        )
+        self.memy = torch.LongTensor(args.n_tasks, self.n_memories).to(self.args.device)
         self.mem_feat = torch.FloatTensor(
             args.n_tasks, self.n_memories, self.nc_per_task
-        )
+        ).to(self.args.device)
         self.mem = {}
 
         self.bsz = args.batch_size
@@ -109,12 +112,14 @@ class DualNet(torch.nn.Module):
     def compute_offsets(self, task):
         return self.nc_per_task * task, self.nc_per_task * (task + 1)
 
-    def forward(self, img, task) -> torch.Tensor:
+    def forward(self, img, task, fast=False) -> torch.Tensor:
         """
         Fast Learner Inference
         """
         feat = self.SlowLearner(img, return_feat=True)
         out = self.FastLearner(img, feat)
+        if fast:
+            return out
 
         offset1, offset2 = self.compute_offsets(task)
         if offset1 > 0:
@@ -129,9 +134,14 @@ class DualNet(torch.nn.Module):
         x = torch.randint(0, self.n_memories, (self.bsz,))
         offsets = torch.tensor([self.compute_offsets(i) for i in t])
         xx = self.memx[t, x]
-        yy = self.memy[t, x] - offsets[:, 0]
+        yy = self.memy[t, x] - offsets[:, 0].to(self.args.device)
         feat = self.mem_feat[t, x]
         mask = torch.zeros(self.bsz, self.nc_per_task)
         for j in range(self.bsz):
             mask[j] = torch.arange(offsets[j][0], offsets[j][1])
-        return xx, yy, feat, mask.long().cuda()
+        return (
+            xx.to(self.args.device),
+            yy.to(self.args.device),
+            feat.to(self.args.device),
+            mask.long().to(self.args.device),
+        )
