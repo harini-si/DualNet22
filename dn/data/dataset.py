@@ -9,42 +9,42 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 
 
 class MyDS(Dataset):
-	def __init__(self, X, y):
-		self.samples = torch.Tensor(X)
-		self.labels = torch.LongTensor(y)
+    def __init__(self, X, y):
+        self.samples = torch.Tensor(X)
+        self.labels = torch.LongTensor(y)
 
-	def __len__(self):
-		return len(self.samples)
+    def __len__(self):
+        return len(self.samples)
 
-	def __getitem__(self, idx):
-		return (self.samples[idx], self.labels[idx])
+    def __getitem__(self, idx):
+        return (self.samples[idx], self.labels[idx])
 
 
 class ImageDataDS(MyDS):
-	def __init__(self, data_split, transform=None):
-		super().__init__(data_split.samples, data_split.labels)
-		self.transform = transform
+    def __init__(self, data_split, transform=None):
+        super().__init__(data_split.samples, data_split.labels)
+        self.transform = transform
 
-	def __getitem__(self, idx):
-		sample, label = super().__getitem__(idx)
-		sample = sample.view(1, 20, 20) / 255
-		if self.transform:
-			sample = self.transform(sample)
-		return (sample, label)
+    def __getitem__(self, idx):
+        sample, label = super().__getitem__(idx)
+        sample = sample.view(1, 20, 20) / 255
+        if self.transform:
+            sample = self.transform(sample)
+        return (sample, label)
 
 
 class ImageData:
-	def __init__():
-		# train_ds
-		# test_ds
-		# images_train
-		# images_test
-		# names_train
-		# names_test
-		# dloader
-		# mapping
+    def __init__():
+        # train_ds
+        # test_ds
+        # images_train
+        # images_test
+        # names_train
+        # names_test
+        # dloader
+        # mapping
 
-		pass
+        pass
 
 
 class MetaLoader(object):
@@ -78,7 +78,7 @@ class MarketTaskset:
         self.df = df
         self.tasks = [self.normalizeTask(v) for _,v in tuple(df.groupby(['sym', 'day']))]
         self.tasks = [self.get_scaled_pairs(X, y, 5) for X, y in self.tasks if X.size(0)>5]
-    
+
     def normalizeTask(self, df):
         normalize = ['Open', 'High', 'Low', 'Close', 'Open_prev', 'High_prev', 'Low_prev', 'Close_prev', 'SMA_10', 'SMA_20', 'SMA_50', 'SMA_200', 'RSI_14', 'BBL_5_2.0', 'BBM_5_2.0', 'BBU_5_2.0',]
         try:

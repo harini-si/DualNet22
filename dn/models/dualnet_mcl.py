@@ -82,7 +82,7 @@ class DualNetMarket(torch.nn.Module):
         self.reg = args.memory_strength
         self.temp = args.temperature
         self.beta = args.beta
-        self.nc_per_task = (4, 4)
+        self.nc_per_task = 4
 
         # setup memories
         self.n_memories = args.n_memories
@@ -124,7 +124,7 @@ class DualNetMarket(torch.nn.Module):
         feat = self.mem_feat[t, x]
         mask = torch.zeros(self.bsz, self.nc_per_task)
         for j in range(self.bsz):
-            mask[j] = torch.arange(offsets[j][0], offsets[j][1])
+            mask[j] = torch.arange(self.nc_per_task)
         return (
             xx.to(self.args.device),
             yy.to(self.args.device),
