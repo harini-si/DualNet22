@@ -1,3 +1,5 @@
+# makefile for project DualNet22
+
 clean:
 	black .
 	isort . --profile black

@@ -6,18 +6,20 @@ from torchvision import transforms
 
 MEAN, STD = (0.082811184, 0.22163138)
 
-class Solarization(object):
-    def __init__(self, p):
-        self.p = p
 
-    def __call__(self, img):
-        if random.random() < self.p:
-            return ImageOps.solarize(img)
-        else:
-            return img
+class Solarization(object):
+	def __init__(self, p):
+		self.p = p
+
+	def __call__(self, img):
+		if random.random() < self.p:
+			return ImageOps.solarize(img)
+		else:
+			return img
 
 
 VCTransform = transforms.Normalize(mean=[MEAN], std=[STD])
+
 
 class BarlowAugment:
     def __init__(self):
@@ -56,3 +58,4 @@ class Corrupt:
         rand = torch.rand(x_.size())
         x_[rand < self.p] = rand[rand < self.p].double()
         return x, x_
+
