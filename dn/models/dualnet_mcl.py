@@ -1,23 +1,24 @@
 import torch
 from torch import nn
 
-from dn.data import BarlowAugment, VCTransform
-from dn.models.extractor import VCResNetFast, VCResNetSlow
+from dn.data import Corrupt
+from dn.models.extractor import LSTMFast, LSTMSlow
 
-SLOW_EMBEDDER = VCResNetSlow
-FAST_EMBEDDER = VCResNetFast
+n_class = 74
+SLOW_EMBEDDER = LSTMSlow
+FAST_EMBEDDER = LSTMFast
 
 
-class SlowLearner(torch.nn.Module):
+class SlowLearnerMarket(torch.nn.Module):
     """
     Slow Learner Takes two images input and returns representation
     """
 
     def __init__(self, args):
-        super(SlowLearner, self).__init__()
+        super(SlowLearnerMarket, self).__init__()
         self.args = args
         self.embedder = SLOW_EMBEDDER(args)
-        self.augmenter = BarlowAugment()
+        self.augmenter = Corrupt()
 
     def forward(self, input, type="BarlowTwins", return_feat=False) -> torch.Tensor:
         """
@@ -32,17 +33,17 @@ class SlowLearner(torch.nn.Module):
                 input[1], return_feat=False
             )
             if type == "BarlowTwins":
-                return self.barlow_twins_losser(emb, emb_)
+                return self.barlow_twins_loss(emb, emb_)
             else:
                 raise NotImplementedError
 
-    def barlow_twins_losser(self, z1, z2):
+    def barlow_twins_loss(self, z1, z2):
         """
         Input: z1, z2 embeddings
         Returns loss by barlo twins method
         """
-        z_a = (z1 - z1.mean(0)) / z1.std(0)
-        z_b = (z2 - z2.mean(0)) / z2.std(0)
+        z_a = (z1 - z1.mean(0)) / (z1.std(0) + self.args.alpha)
+        z_b = (z2 - z2.mean(0)) / (z2.std(0) + self.args.alpha)
         N, D = z_a.size(0), z_a.size(1)
         c_ = torch.mm(z_a.T, z_b) / N
         diag = torch.eye(D).to(self.args.device)
@@ -52,36 +53,36 @@ class SlowLearner(torch.nn.Module):
         return loss
 
 
-class FastLearner(torch.nn.Module):
+class FastLearnerMarket(torch.nn.Module):
     """
     Fast Learner Takes image input and returns meta task output
     """
 
     def __init__(self, args):
-        super(FastLearner, self).__init__()
+        super(FastLearnerMarket, self).__init__()
         self.args = args
         self.embedder = FAST_EMBEDDER(args)
 
-    def forward(self, img, feat) -> torch.Tensor:
+    def forward(self, stock, feat) -> torch.Tensor:
         """
         Obtain representation from slow learner
         """
-        out = self.embedder(img, feat)
+        out = self.embedder(stock, feat)
         return out
 
 
-class DualNet(torch.nn.Module):
+class DualNetMarket(torch.nn.Module):
     """
     Takes Slow, fast learners and implements dualnet
     """
 
     def __init__(self, args):
-        super(DualNet, self).__init__()
+        super(DualNetMarket, self).__init__()
         self.args = args
         self.reg = args.memory_strength
         self.temp = args.temperature
         self.beta = args.beta
-        self.nc_per_task = int(args.n_class // args.n_tasks)
+        self.nc_per_task = (4, 4)
 
         # setup memories
         self.n_memories = args.n_memories
@@ -91,7 +92,7 @@ class DualNet(torch.nn.Module):
         )
         self.memy = torch.LongTensor(args.n_tasks, self.n_memories).to(self.args.device)
         self.mem_feat = torch.FloatTensor(
-            args.n_tasks, self.n_memories, self.nc_per_task
+            args.n_tasks, self.n_memories, self.nc_per_task[0], self.nc_per_task[1]
         ).to(self.args.device)
         self.mem = {}
 
@@ -102,38 +103,24 @@ class DualNet(torch.nn.Module):
         self.inner_steps = args.inner_steps
         self.n_outer = args.n_outer
 
-        self.SlowLearner = SlowLearner(args)
-        self.FastLearner = FastLearner(args)
+        self.SlowLearner = SlowLearnerMarket(args)
+        self.FastLearner = FastLearnerMarket(args)
 
-        self.VCTransform = VCTransform
-        self.barlow_augment = BarlowAugment()
+        self.augment = Corrupt()
 
-    def compute_offsets(self, task):
-        return self.nc_per_task * task, self.nc_per_task * (task + 1)
-
-    def forward(self, img, task, fast=False) -> torch.Tensor:
+    def forward(self, stock) -> torch.Tensor:
         """
         Fast Learner Inference
         """
-        feat = self.SlowLearner(img, return_feat=True)
-        out = self.FastLearner(img, feat)
-        if fast:
-            return out
-
-        offset1, offset2 = self.compute_offsets(task)
-        if offset1 > 0:
-            out[:, :offset1].data.fill_(-10e10)
-        if offset2 < self.n_class:
-            out[:, int(offset2) : self.n_class].data.fill_(-10e10)
-
+        feat = self.SlowLearner(stock, return_feat=True)
+        out = self.FastLearner(stock, feat)
         return out
 
     def memory_consolidation(self, task):
         t = torch.randint(0, task, (self.bsz,))
         x = torch.randint(0, self.n_memories, (self.bsz,))
-        offsets = torch.tensor([self.compute_offsets(i) for i in t])
         xx = self.memx[t, x]
-        yy = self.memy[t, x] - offsets[:, 0].to(self.args.device)
+        yy = self.memy[t, x]
         feat = self.mem_feat[t, x]
         mask = torch.zeros(self.bsz, self.nc_per_task)
         for j in range(self.bsz):

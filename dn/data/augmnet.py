@@ -1,5 +1,6 @@
 import random
 
+import torch
 from PIL import Image, ImageFilter, ImageOps
 from torchvision import transforms
 
@@ -45,3 +46,13 @@ class BarlowAugment:
         # y1 = x
         y2 = self.transform_prime(x)
         return y1, y2
+
+class Corrupt:
+    def __init__(self, p=0.2):
+        self.p = p
+
+    def __call__(self, x):
+        x_ = x.clone()
+        rand = torch.rand(x_.size())
+        x_[rand < self.p] = rand[rand < self.p].double()
+        return x, x_
