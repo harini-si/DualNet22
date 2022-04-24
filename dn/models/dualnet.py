@@ -78,6 +78,7 @@ class DualNet(torch.nn.Module):
   """
 
   def __init__(self, args):
+		# setup network
     super(DualNet, self).__init__()
     self.args = args
     self.reg = args.memory_strength
@@ -105,6 +106,7 @@ class DualNet(torch.nn.Module):
     self.inner_steps = args.inner_steps
     self.n_outer = args.n_outer
 
+		# setup learners
     self.SlowLearner = SlowLearner(args)
     self.FastLearner = FastLearner(args)
 

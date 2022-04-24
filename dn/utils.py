@@ -7,7 +7,7 @@ import torch
 
 
 def deterministic(args):
-  # set seed
+  # set seed for reproducibility
   random.seed(args.seed)
   np.random.seed(args.seed)
 
@@ -19,7 +19,7 @@ def deterministic(args):
 
 
 def load_image_data_pickle(path):
-	# load image data from pickle file
+	# load image data from pickle file given path
   with open(path, "rb") as f:
     data = pickle.load(f)
   return data
