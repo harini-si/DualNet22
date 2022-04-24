@@ -4,8 +4,6 @@ from torch import nn
 from dn.data import BarlowAugment, VCTransform
 from dn.models.extractor import VCResNetFast, VCResNetSlow
 
-# initialize global variables
-n_class = 74
 SLOW_EMBEDDER = VCResNetSlow
 FAST_EMBEDDER = VCResNetFast
 
