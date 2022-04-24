@@ -183,7 +183,8 @@ if __name__ == "__main__":
                 break
             test_loss = 0
             for data, target in te_loader:
-                data, target = data, target
+                data, target = data.to(device), target.to(device)
+                data = model.VCTransform(data)
                 logits = model(data, task_t)
                 loss = CLoss(logits, target)
 
