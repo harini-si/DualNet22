@@ -37,9 +37,10 @@ parser.add_argument("--ssl_lr", type=float, default=0.001)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--path", type=str, default="./data/dfcl.csv")
 parser.add_argument("--hidden_dim", type=int, default=64)
-parser.add_argument("--input_dim", type=int, default=28)
+parser.add_argument("--input_dim", type=int, default=32)
 parser.add_argument("--alpha", type=float, default=1e-3)
 parser.add_argument("--out_dim", type=int, default=4)
+parser.add_argument("--out_dim_r", type=int, default=6)
 parser.add_argument("--n_class", type=int, default=4)
 parser.add_argument("--n_tasks", type=int, default=224)
 parser.add_argument(
@@ -81,6 +82,7 @@ if __name__ == "__main__":
     model = DualNetMarket(args).to(device)
     CLoss = torch.nn.CrossEntropyLoss()
     KLLoss = torch.nn.KLDivLoss()
+    MSELoss = torch.nn.MSELoss()
 
     opt = torch.optim.SGD(model.parameters(), lr=args.lr)
     ssl_opt = torch.optim.SGD(model.SlowLearner.parameters(), lr=args.ssl_lr)
@@ -89,12 +91,12 @@ if __name__ == "__main__":
         model.train()
         if task > 0:
             x = model.memx[task]
-            out = model(x)
-            model.mem_feat[task] = F.softmax(out / model.temp, dim=1).data.clone()
+            out_c, _ = model(x)
+            model.mem_feat[task] = F.softmax(out_c / model.temp, dim=1).data.clone()
         for epoch in range(args.n_epochs):
             logging.info("Epoch {}".format(epoch))
-            for i, (x, y) in enumerate(train_loader):
-                x, y = x.to(device), y.to(device)
+            for i, (x, y_c, y_r) in enumerate(train_loader):
+                x, y_c, y_r = x.to(device), y_c.to(device), y_r.to(device)
                 endcnt = min(model.mem_cnt + args.batch_size, model.n_memories)
                 effbsz = endcnt - model.mem_cnt
                 if effbsz > x.size(0):
@@ -136,9 +138,10 @@ if __name__ == "__main__":
                 total = 0
                 for _ in range(args.inner_steps):
                     model.zero_grad()
-                    pred = model(x)
-                    loss1 = CLoss(pred, y)
-                    correct += torch.sum(torch.argmax(pred, dim=1) == y)
+                    pred_c, pred_r = model(x)
+                    loss1_c, loss1_r = CLoss(pred_c, y[:args.out_dim_r]), MSELoss(pred_r, y[args.out_dim_r:])
+                    loss1 = loss1_c + loss1_r
+                    correct += torch.sum(torch.argmax(pred_c, dim=1) == y[:args.out_dim_r])
                     total += y.size(0) * y.size(-1)
                     writer.add_scalar(
                         "training acc",
@@ -146,17 +149,21 @@ if __name__ == "__main__":
                         epoch * len(train_loader) + i,
                     )
                     writer.add_scalar(
-                        "training loss", loss1.item(), epoch * len(train_loader) + i
+                        "training loss cf", loss1_c.item(), epoch * len(train_loader) + i
+                    )
+                    writer.add_scalar(
+                        "training loss r", loss1_r.item(), epoch * len(train_loader) + i
                     )
                     loss2, loss3 = 0, 0
                     if task > 0:
                         xx, yy, target, mask = model.memory_consolidation(task)
-                        pred = torch.gather(model(xx), 1, mask)
+                        pred_, _ = model(xx)
+                        pred = torch.gather(pred_, 1, mask)
                         if ((yy.detach().cpu().numpy().flatten() > 3).sum() > 0) or (
                             (yy.detach().cpu().numpy().flatten() < 0).sum() > 0
                         ):
                             continue
-                        loss2 += CLoss(pred, yy)
+                        loss2 += CLoss(pred, yy[:args.out_dim_r])
                         loss3 = model.reg * KLLoss(
                             F.log_softmax(pred / model.temp, dim=1), target
                         )
@@ -176,10 +183,12 @@ if __name__ == "__main__":
             correct, total = 0, 0
             for data, target in te_loader:
                 data, target = data.to(device), target.to(device)
-                logits = model(data)
-                loss = CLoss(logits, target)
+                logits, reg = model(data)
+                closs = CLoss(logits, target[:args.out_dim_r])
+                rloss = MSELoss(reg, target[args.out_dim_r:])
 
-                writer.add_scalar("test loss", loss.item(), epoch * len(te_loader) + i)
+                writer.add_scalar("test loss c", closs.item(), epoch * len(te_loader) + i)
+                writer.add_scalar("test loss r", rloss.item(), epoch * len(te_loader) + i)
                 correct += torch.sum(torch.argmax(logits, dim=1) == target)
                 total += target.size(0) * target.size(-1)
 

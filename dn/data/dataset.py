@@ -69,6 +69,7 @@ class MetaLoader(object):
 
 class MarketTaskset:
     def __init__(self, csv, args, maxSym=15, maxDay=15, split="Train") -> None:
+        self.args = args
         df = pd.read_csv(csv)
         df.interpolate(axis=1, method="linear", inplace=True)
         df = df[(df["sym"] < maxSym) & (df["day"] < maxDay)]
@@ -141,17 +142,17 @@ class MarketTaskset:
             "MACDh_12_26_9",
             "MACDs_12_26_9",
             "sym",
-        ]
-        labels = ["(0.02, 0.01)", "(0.01, 0.005)", "(0.01, 0.02)", "(0.005, 0.01)"]
+            "(0.02, 0.01)", "(0.01, 0.005)", "(0.01, 0.02)", "(0.005, 0.01)"]
+        labels = inputs[:6] + inputs[-4:]
         return torch.tensor(df[inputs].values), torch.tensor(df[labels].values)
 
     def get_scaled_pairs(self, X, y, seq_len):
-        X = normalize(X, dim=0)
+        X[:-4] = normalize(X[:-4], dim=0)
         x_scaled = [X[i : i + seq_len] for i in range(len(X) - seq_len - 1)]
         y = [y[i + seq_len : i + seq_len + 1] for i in range(len(y) - seq_len - 1)]
         x_scaled = torch.stack(x_scaled)
         y = torch.stack(y)[:, 0]
-        return x_scaled.float(), y.long()
+        return x_scaled.float(), y[:,:self.args.out_dim_r].long(), y[:,self.args.out_dim_r:].float()
 
     def __getitem__(self, idx):
         return self.tasks[idx]
