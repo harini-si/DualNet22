@@ -4,3 +4,4 @@ data/*.pkl
 data/*.zip
 data/*.csv
 logs/*.txt
+test*.ipynb
