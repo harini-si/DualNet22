@@ -36,9 +36,12 @@ parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--ssl_lr", type=float, default=0.001)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--path", type=str, default="./data/dfcl.csv")
-parser.add_argument("--n_ways", type=int, default=5)
-parser.add_argument("--n_class", type=int, default=74)
-parser.add_argument("--n_tasks", type=int, default=14)
+parser.add_argument("--hidden_dim", type=int, default=64)
+parser.add_argument("--input_dim", type=int, default=28)
+parser.add_argument("--alpha", type=float, default=1e-3)
+parser.add_argument("--out_dim", type=int, default=4)
+parser.add_argument("--n_class", type=int, default=4)
+parser.add_argument("--n_tasks", type=int, default=224)
 parser.add_argument(
     "--n_memories", type=int, default=50, help="number of memories per task"
 )
@@ -63,6 +66,7 @@ parser.add_argument(
 parser.add_argument("--replay_batch_size", type=int, default=10)
 parser.add_argument("--n_outer", type=int, default=1)
 parser.add_argument("--device", type=str, default="cpu")
+
 args = parser.parse_args()
 
 if __name__ == "__main__":
@@ -84,7 +88,7 @@ if __name__ == "__main__":
         logging.info("Running Task {}".format(task))
         model.train()
         if task > 0:
-            x = model.VCTransform(model.memx[task])
+            x = model.memx[task]
             out = model(x, task)
             model.mem_feat[task] = F.softmax(out / model.temp, dim=1).data.clone()
         for epoch in range(args.n_epochs):

@@ -17,7 +17,7 @@ class ContinousNWays(TaskTransform):
             self.id = 0
         task_description = []
         labels_to_indices = dict(self.dataset.labels_to_indices)
-        classes = self.labels[self.id * self.n: (self.id + 1) * self.n]
+        classes = self.labels[self.id * self.n : (self.id + 1) * self.n]
         for cl in classes:
             for idx in labels_to_indices[cl]:
                 task_description.append(DataDescription(idx))

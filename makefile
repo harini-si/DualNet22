@@ -1,9 +1,7 @@
-# makefile for project DualNet22
-
 clean:
 	black .
 	isort . --profile black
-	flake8 . --ignore=F401,E501,E402,E203,W503
+	flake8 . --ignore=F401,E501,E203,W503
 
 install:
 	pip install black isort flake8

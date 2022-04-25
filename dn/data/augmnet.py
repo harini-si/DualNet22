@@ -27,8 +27,8 @@ class BarlowAugment:
             [
                 transforms.RandomResizedCrop(20),
                 transforms.RandomHorizontalFlip(p=0.5),
-                transforms.GaussianBlur((3,3),(0.1,2.0)),
-                transforms.RandomSolarize(threshold = 0.2, p=0.0),
+                transforms.GaussianBlur((3, 3), (0.1, 2.0)),
+                transforms.RandomSolarize(threshold=0.2, p=0.0),
                 transforms.Normalize(mean=[MEAN], std=[STD]),
             ]
         )
@@ -37,8 +37,8 @@ class BarlowAugment:
             [
                 transforms.RandomResizedCrop(20),
                 transforms.RandomHorizontalFlip(p=0.5),
-                transforms.GaussianBlur((3,3),(0.1,2.0)),
-                transforms.RandomSolarize(threshold = 0.5, p=0.0),
+                transforms.GaussianBlur((3, 3), (0.1, 2.0)),
+                transforms.RandomSolarize(threshold=0.5, p=0.0),
                 transforms.Normalize(mean=[MEAN], std=[STD]),
             ]
         )
@@ -48,6 +48,7 @@ class BarlowAugment:
         # y1 = x
         y2 = self.transform_prime(x)
         return y1, y2
+
 
 class Corrupt:
     def __init__(self, p=0.2):

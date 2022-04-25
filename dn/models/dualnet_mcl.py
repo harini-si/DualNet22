@@ -92,7 +92,7 @@ class DualNetMarket(torch.nn.Module):
         )
         self.memy = torch.LongTensor(args.n_tasks, self.n_memories).to(self.args.device)
         self.mem_feat = torch.FloatTensor(
-            args.n_tasks, self.n_memories, self.nc_per_task[0], self.nc_per_task[1]
+            args.n_tasks, self.n_memories, self.nc_per_task
         ).to(self.args.device)
         self.mem = {}
 
