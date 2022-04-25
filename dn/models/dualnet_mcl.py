@@ -123,9 +123,9 @@ class DualNetMarket(torch.nn.Module):
         xx = self.memx[t, x]
         yy = self.memy[t, x]
         feat = self.mem_feat[t, x]
-        mask = torch.zeros(self.bsz, self.nc_per_task)
+        mask = torch.zeros(self.bsz, self.args.out_dim, self.args.n_class)
         for j in range(self.bsz):
-            mask[j] = torch.arange(self.nc_per_task)
+            mask[j] = torch.stack(self.args.out_dim * [torch.arange(self.args.n_class)])
         return (
             xx.to(self.args.device),
             yy.to(self.args.device),

@@ -57,5 +57,5 @@ class Corrupt:
     def __call__(self, x):
         x_ = x.clone()
         rand = torch.rand(x_.size())
-        x_[rand < self.p] = rand[rand < self.p].double()
+        x_[rand < self.p] = rand[rand < self.p].float()
         return x, x_

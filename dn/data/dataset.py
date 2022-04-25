@@ -151,7 +151,7 @@ class MarketTaskset:
         y = [y[i + seq_len : i + seq_len + 1] for i in range(len(y) - seq_len - 1)]
         x_scaled = torch.stack(x_scaled)
         y = torch.stack(y)[:, 0]
-        return x_scaled.double(), y.long()
+        return x_scaled.float(), y.long()
 
     def __getitem__(self, idx):
         return self.tasks[idx]

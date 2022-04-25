@@ -198,8 +198,6 @@ if __name__ == "__main__":
 
                 writer.add_scalar("test loss", loss.item(), epoch * len(te_loader) + i)
                 pred = logits.argmax(dim=1, keepdim=True)
-                print(target)
-                print(pred)
                 correct = pred.eq(target.view_as(pred)).sum().item()
 
             acc = correct / len(data)

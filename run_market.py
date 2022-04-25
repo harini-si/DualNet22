@@ -31,7 +31,7 @@ logging.basicConfig(
 # default `log_dir` is "runs" - we'll be more specific here
 parser = argparse.ArgumentParser(description="DualNet-Image")
 parser.add_argument("--batch_size", type=int, default=32)
-parser.add_argument("--n_epochs", type=int, default=100)
+parser.add_argument("--n_epochs", type=int, default=2)
 parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--ssl_lr", type=float, default=0.001)
 parser.add_argument("--seed", type=int, default=42)
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         "data/dfcl_mini.csv", args
     ), MarketTaskset("data/dfcl_mini.csv", args, split="Test")
 
-    model = DualNetMarket(args).double().to(device)
+    model = DualNetMarket(args).to(device)
     CLoss = torch.nn.CrossEntropyLoss()
     KLLoss = torch.nn.KLDivLoss()
 
@@ -89,7 +89,7 @@ if __name__ == "__main__":
         model.train()
         if task > 0:
             x = model.memx[task]
-            out = model(x, task)
+            out = model(x)
             model.mem_feat[task] = F.softmax(out / model.temp, dim=1).data.clone()
         for epoch in range(args.n_epochs):
             logging.info("Epoch {}".format(epoch))
@@ -151,7 +151,11 @@ if __name__ == "__main__":
                     loss2, loss3 = 0, 0
                     if task > 0:
                         xx, yy, target, mask = model.memory_consolidation(task)
-                        pred = torch.gather(model(xx, fast=True), 1, mask)
+                        pred = torch.gather(model(xx), 1, mask)
+                        if ((yy.detach().cpu().numpy().flatten() > 3).sum() > 0) or (
+                            (yy.detach().cpu().numpy().flatten() < 0).sum() > 0
+                        ):
+                            continue
                         loss2 += CLoss(pred, yy)
                         loss3 = model.reg * KLLoss(
                             F.log_softmax(pred / model.temp, dim=1), target
@@ -169,16 +173,18 @@ if __name__ == "__main__":
             if task_t > task:
                 break
             test_loss = 0
+            correct, total = 0, 0
             for data, target in te_loader:
                 data, target = data.to(device), target.to(device)
                 logits = model(data)
                 loss = CLoss(logits, target)
 
                 writer.add_scalar("test loss", loss.item(), epoch * len(te_loader) + i)
-                pred = logits.argmax(dim=1, keepdim=True)
-                print(target)
-                print(pred)
-                correct = pred.eq(target.view_as(pred)).sum().item()
+                correct += torch.sum(torch.argmax(logits, dim=1) == target)
+                total += target.size(0) * target.size(-1)
 
-            acc = correct / len(data)
-            logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
+            try:
+                acc = int(correct) / int(total)
+                logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
+            except ZeroDivisionError:
+                logging.info(f"Task {task_t} has 0 samples")
