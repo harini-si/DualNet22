@@ -65,7 +65,7 @@ args = parser.parse_args()
 
 # main code
 if __name__ == "__main__":
-    writer = SummaryWriter(f"runs/test_1_{time.time()}")
+    writer = SummaryWriter(f"results/test_MCL_{time.time()}")
     deterministic(args)
     device = torch.device(args.device)  # use device specified in args
 

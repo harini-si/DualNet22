@@ -70,7 +70,7 @@ parser.add_argument("--device", type=str, default="cpu")
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    writer = SummaryWriter(f"runs/test_1_{time.time()}")
+    writer = SummaryWriter(f"results/test_VC_{time.time()}")
     deterministic(args)
     device = torch.device(args.device)
 
