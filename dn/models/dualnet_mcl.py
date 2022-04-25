@@ -82,17 +82,18 @@ class DualNetMarket(torch.nn.Module):
         self.reg = args.memory_strength
         self.temp = args.temperature
         self.beta = args.beta
-        self.nc_per_task = 4
 
         # setup memories
         self.n_memories = args.n_memories
         self.mem_cnt = 0
-        self.memx = torch.FloatTensor(args.n_tasks, self.n_memories, 1, 20, 20).to(
+        self.memx = torch.FloatTensor(
+            args.n_tasks, self.n_memories, args.seq_len, args.input_dim
+        ).to(self.args.device)
+        self.memy = torch.LongTensor(args.n_tasks, self.n_memories, args.out_dim).to(
             self.args.device
         )
-        self.memy = torch.LongTensor(args.n_tasks, self.n_memories).to(self.args.device)
         self.mem_feat = torch.FloatTensor(
-            args.n_tasks, self.n_memories, self.nc_per_task
+            args.n_tasks, self.n_memories, args.out_dim, args.n_class
         ).to(self.args.device)
         self.mem = {}
 

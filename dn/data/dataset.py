@@ -68,7 +68,7 @@ class MetaLoader(object):
 
 
 class MarketTaskset:
-    def __init__(self, csv, maxSym=15, maxDay=15, split="Train") -> None:
+    def __init__(self, csv, args, maxSym=15, maxDay=15, split="Train") -> None:
         df = pd.read_csv(csv)
         df.interpolate(axis=1, method="linear", inplace=True)
         df = df[(df["sym"] < maxSym) & (df["day"] < maxDay)]
@@ -83,7 +83,9 @@ class MarketTaskset:
             self.normalizeTask(v) for _, v in tuple(df.groupby(["sym", "day"]))
         ]
         self.tasks = [
-            self.get_scaled_pairs(X, y, 5) for X, y in self.tasks if X.size(0) > 5
+            self.get_scaled_pairs(X, y, args.seq_len)
+            for X, y in self.tasks
+            if X.size(0) > 5
         ]
 
     def normalizeTask(self, df):
@@ -145,13 +147,11 @@ class MarketTaskset:
 
     def get_scaled_pairs(self, X, y, seq_len):
         X = normalize(X, dim=0)
-        x_train = [X[i : i + seq_len] for i in range(len(X) - seq_len - 1)]
-        y_train = [
-            y[i + seq_len : i + seq_len + 1] for i in range(len(y) - seq_len - 1)
-        ]
-        x_train = torch.stack(x_train)
-        y_train = torch.stack(y_train)
-        return x_train.double(), y_train.double()
+        x_scaled = [X[i : i + seq_len] for i in range(len(X) - seq_len - 1)]
+        y = [y[i + seq_len : i + seq_len + 1] for i in range(len(y) - seq_len - 1)]
+        x_scaled = torch.stack(x_scaled)
+        y = torch.stack(y)[:, 0]
+        return x_scaled.double(), y.long()
 
     def __getitem__(self, idx):
         return self.tasks[idx]

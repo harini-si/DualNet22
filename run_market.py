@@ -66,7 +66,7 @@ parser.add_argument(
 parser.add_argument("--replay_batch_size", type=int, default=10)
 parser.add_argument("--n_outer", type=int, default=1)
 parser.add_argument("--device", type=str, default="cpu")
-
+parser.add_argument("--seq_len", type=int, default=5)
 args = parser.parse_args()
 
 if __name__ == "__main__":
@@ -74,11 +74,11 @@ if __name__ == "__main__":
     deterministic(args)
     device = torch.device(args.device)
 
-    train_taskset, test_taskset = MarketTaskset("data/dfcl_mini.csv"), MarketTaskset(
-        "data/dfcl_mini.csv", split="Test"
-    )
+    train_taskset, test_taskset = MarketTaskset(
+        "data/dfcl_mini.csv", args
+    ), MarketTaskset("data/dfcl_mini.csv", args, split="Test")
 
-    model = DualNetMarket(args).to(device)
+    model = DualNetMarket(args).double().to(device)
     CLoss = torch.nn.CrossEntropyLoss()
     KLLoss = torch.nn.KLDivLoss()
 
