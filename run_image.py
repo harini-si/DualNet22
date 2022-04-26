@@ -69,6 +69,7 @@ args = parser.parse_args()
 if __name__ == "__main__":
     with tqdm(range(args.n_runs), total=args.n_runs) as pbar:
         for run in pbar:
+            logging.info("Run {}".format(run))
             writer = SummaryWriter(f"{args.save_path}/test_MCL_{time.time()}")
             metrics = Metrics(args)
             deterministic(args)
