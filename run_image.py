@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 from learn2learn.data import TaskDataset
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 
 # import custom libraries
 from dn.data import ContinousNWays, ImageData, ImageDataDS, MetaLoader, MyDS
@@ -26,13 +26,12 @@ logging.basicConfig(
     filemode="w+",
 )
 
-
 # default `log_dir` is "runs" - we'll be more specific here
 parser = argparse.ArgumentParser(description="DualNet-Image")
 parser.add_argument("--n_runs", type=int, default=5)
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--n_epochs", type=int, default=2)
-parser.add_argument("--lr", type=float, default=0.01)
+parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--ssl_lr", type=float, default=0.001)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--path", type=str, default="./data/image_data.pickle")
@@ -51,7 +50,7 @@ parser.add_argument(
 parser.add_argument("--reg", default=1.0, type=float)
 parser.add_argument("--inner_steps", type=int, default=1)
 parser.add_argument(
-    "--temperature", type=float, default=2.0, help="temperature for distilation"
+    "--temperature", type=float, default=1.0, help="temperature for distilation"
 )
 parser.add_argument("--beta", type=float, default=0.3)
 parser.add_argument(
@@ -67,12 +66,14 @@ args = parser.parse_args()
 
 # main code
 if __name__ == "__main__":
-    with tqdm(range(args.n_runs), total=args.n_runs) as pbar:
+    with tqdm(
+        range(args.n_runs), desc="Runs Loop", leave=False, position=0, total=args.n_runs
+    ) as pbar:
         for run in pbar:
             logging.info("Run {}".format(run))
             writer = SummaryWriter(f"{args.save_path}/test_MCL_{time.time()}")
             metrics = Metrics(args)
-            deterministic(args)
+            deterministic(args.seed + run)
             device = torch.device(args.device)  # use device specified in args
 
             data = load_image_data_pickle(args.path)
@@ -107,6 +108,8 @@ if __name__ == "__main__":
                 enumerate(MetaLoader(train_taskset, args, train=True)),
                 desc="Task Loop",
                 total=args.n_tasks,
+                leave=False,
+                position=0,
             ) as outer:
                 for task, train_loader in outer:
                     logging.info("Running Task {}".format(task))
@@ -243,6 +246,8 @@ if __name__ == "__main__":
                         enumerate(MetaLoader(test_taskset, args, train=False)),
                         desc="Test Loop",
                         total=task,
+                        leave=False,
+                        position=0,
                     ) as inner:
                         for task_t, te_loader in inner:
                             if task_t > task:
@@ -255,7 +260,7 @@ if __name__ == "__main__":
                                 # loss = CLoss(logits, target)
                                 pred = logits.argmax(dim=1, keepdim=True)
                                 correct += pred.eq(target.view_as(pred)).sum().item()
-                            acc = correct / len(data)
+                            acc = correct / (len(data) * len(te_loader))
                             metrics.update_metric(run, task, task_t, acc)
                             logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
     print(metrics)
