@@ -14,7 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 # import custom libraries
 from dn.data import ContinousNWays, ImageData, ImageDataDS, MetaLoader, MyDS
 from dn.models import DualNet
-from dn.utils import deterministic, load_image_data_pickle
+from dn.utils import Metrics, deterministic, load_image_data_pickle
 
 # set logging
 logging.basicConfig(
@@ -30,8 +30,8 @@ logging.basicConfig(
 parser = argparse.ArgumentParser(description="DualNet-Image")
 parser.add_argument("--n_runs", type=int, default=5)
 parser.add_argument("--batch_size", type=int, default=32)
-parser.add_argument("--n_epochs", type=int, default=100)
-parser.add_argument("--lr", type=float, default=0.001)
+parser.add_argument("--n_epochs", type=int, default=2)
+parser.add_argument("--lr", type=float, default=0.01)
 parser.add_argument("--ssl_lr", type=float, default=0.001)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--path", type=str, default="./data/image_data.pickle")
@@ -50,7 +50,7 @@ parser.add_argument(
 parser.add_argument("--reg", default=1.0, type=float)
 parser.add_argument("--inner_steps", type=int, default=1)
 parser.add_argument(
-    "--temperature", type=float, default=1.0, help="temperature for distilation"
+    "--temperature", type=float, default=2.0, help="temperature for distilation"
 )
 parser.add_argument("--beta", type=float, default=0.3)
 parser.add_argument(
@@ -67,7 +67,8 @@ args = parser.parse_args()
 # main code
 if __name__ == "__main__":
     for run in args.n_runs:
-        writer = SummaryWriter(f"results/test_MCL_{time.time()}")
+        writer = SummaryWriter(f"{args.save_path}/test_MCL_{time.time()}")
+        metrics = Metrics(args)
         deterministic(args)
         device = torch.device(args.device)  # use device specified in args
 
@@ -142,7 +143,7 @@ if __name__ == "__main__":
                             writer.add_scalar(
                                 "SSL loss",
                                 SSLLoss.item(),
-                                epoch * len(train_loader) + i,
+                                (epoch * len(train_loader) + i) * args.n_outer + j,
                             )
 
                         weights_after = model.state_dict()
@@ -159,7 +160,7 @@ if __name__ == "__main__":
                     running_loss1 = 0
                     correct = 0
                     total = 0
-                    for _ in range(args.inner_steps):
+                    for inner in range(args.inner_steps):
                         model.zero_grad()
                         x = model.VCTransform(x)
                         offset1, offset2 = model.compute_offsets(task)
@@ -172,10 +173,12 @@ if __name__ == "__main__":
                         writer.add_scalar(
                             "training acc",
                             correct.item() / total,
-                            epoch * len(train_loader) + i,
+                            (epoch * len(train_loader) + i) * args.inner_steps + inner,
                         )
                         writer.add_scalar(
-                            "training loss", loss1.item(), epoch * len(train_loader) + i
+                            "training loss",
+                            loss1.item(),
+                            (epoch * len(train_loader) + i) * args.inner_steps + inner,
                         )
                         loss2, loss3 = 0, 0
                         if task > 0:
@@ -190,7 +193,9 @@ if __name__ == "__main__":
                             )
                         loss = loss1 + loss2 + loss3
                         writer.add_scalar(
-                            "final loss", loss.item(), epoch * len(train_loader) + i
+                            "final loss",
+                            loss.item(),
+                            (epoch * len(train_loader) + i) * args.inner_steps + inner,
                         )
                         loss.backward()
                         opt.step()
@@ -202,18 +207,16 @@ if __name__ == "__main__":
             ):
                 if task_t > task:
                     break
-                test_loss = 0
+                correct = 0
                 for data, target in te_loader:
                     data, target = data.to(device), target.to(device)
                     data = model.VCTransform(data)
                     logits = model(data, task_t)
-                    loss = CLoss(logits, target)
-
-                    writer.add_scalar(
-                        "test loss", loss.item(), epoch * len(te_loader) + i
-                    )
+                    # loss = CLoss(logits, target)
                     pred = logits.argmax(dim=1, keepdim=True)
-                    correct = pred.eq(target.view_as(pred)).sum().item()
-
+                    correct += pred.eq(target.view_as(pred)).sum().item()
                 acc = correct / len(data)
+                metrics.update_metric(run, task, task_t, acc)
                 logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
+    print(metrics)
+    metrics.plot()
