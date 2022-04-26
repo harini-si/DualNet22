@@ -29,7 +29,7 @@ def load_image_data_pickle(path):
 class Metrics:
     def __init__(self, args):
         self.args = args
-        self.accs = np.zeros(self.args.n_runs, self.args.n_tasks, self.args.n_tasks)
+        self.accs = np.zeros((self.args.n_runs, self.args.n_tasks, self.args.n_tasks))
 
     def __repr__(self):
         final, best, forget, learn = self.get_metrics()
