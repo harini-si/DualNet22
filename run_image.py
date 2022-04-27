@@ -66,13 +66,13 @@ args = parser.parse_args()
 
 # main code
 if __name__ == "__main__":
+    metrics = Metrics(args)
     with tqdm(
         range(args.n_runs), desc="Runs Loop", leave=False, position=0, total=args.n_runs
     ) as pbar:
         for run in pbar:
             logging.info("Run {}".format(run))
             writer = SummaryWriter(f"{args.save_path}/test_MCL_{time.time()}")
-            metrics = Metrics(args)
             deterministic(args.seed + run)
             device = torch.device(args.device)  # use device specified in args
 

@@ -58,7 +58,7 @@ class Metrics:
         return np.max(self.accs, 1)
 
     def get_learn_acc(self):
-        np.diag(self.accs.mean(0))
+        return np.diag(self.accs.mean(0))
 
     def get_final_acc(self):
         return self.accs[:, -1]
@@ -75,7 +75,7 @@ class Metrics:
         return final, best, self.get_forgetting_measure(best, final), learn
 
     def plot(self, top_k=5):
-        acc = self.acc.mean(0)[:, :top_k].T.reshape(
+        acc = self.accs.mean(0)[:, :top_k].T.reshape(
             -1,
         )
         train_task = np.concatenate([np.arange(self.args.n_tasks)] * top_k)
