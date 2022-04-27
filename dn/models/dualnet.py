@@ -3,6 +3,7 @@ from torch import nn
 
 from dn.data import BarlowAugment, VCTransform
 from dn.models.extractor import VCResNetFast, VCResNetSlow
+from dn.models.memory import Memory
 
 SLOW_EMBEDDER = VCResNetSlow
 FAST_EMBEDDER = VCResNetFast
@@ -79,34 +80,17 @@ class DualNet(torch.nn.Module):
         # setup network
         super(DualNet, self).__init__()
         self.args = args
-        self.reg = args.memory_strength
-        self.temp = args.temperature
-        self.beta = args.beta
+        self.n_class = args.n_class
         self.nc_per_task = int(args.n_class // args.n_tasks)
 
         # setup memories
-        self.n_memories = args.n_memories
-        self.mem_cnt = 0
-        self.memx = torch.FloatTensor(args.n_tasks, self.n_memories, 1, 20, 20).to(
-            self.args.device
-        )
-        self.memy = torch.LongTensor(args.n_tasks, self.n_memories).to(self.args.device)
-        self.mem_feat = torch.FloatTensor(
-            args.n_tasks, self.n_memories, self.nc_per_task
-        ).to(self.args.device)
-        self.mem = {}
-
-        self.bsz = args.batch_size
-        self.n_class = args.n_class
-        self.rsz = args.replay_batch_size
-
-        self.inner_steps = args.inner_steps
-        self.n_outer = args.n_outer
+        self.memory = Memory(args, self.nc_per_task, self.compute_offsets)
 
         # setup learners
         self.SlowLearner = SlowLearner(args)
         self.FastLearner = FastLearner(args)
 
+        # Transforms
         self.VCTransform = VCTransform
         self.barlow_augment = BarlowAugment()
 
@@ -129,20 +113,3 @@ class DualNet(torch.nn.Module):
             out[:, int(offset2) : self.n_class].data.fill_(-10e10)
 
         return out
-
-    def memory_consolidation(self, task):
-        t = torch.randint(0, task, (self.bsz,))
-        x = torch.randint(0, self.n_memories, (self.bsz,))
-        offsets = torch.tensor([self.compute_offsets(i) for i in t])
-        xx = self.memx[t, x]
-        yy = self.memy[t, x] - offsets[:, 0].to(self.args.device)
-        feat = self.mem_feat[t, x]
-        mask = torch.zeros(self.bsz, self.nc_per_task)
-        for j in range(self.bsz):
-            mask[j] = torch.arange(offsets[j][0], offsets[j][1])
-        return (
-            xx.to(self.args.device),
-            yy.to(self.args.device),
-            feat.to(self.args.device),
-            mask.long().to(self.args.device),
-        )

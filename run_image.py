@@ -28,19 +28,35 @@ logging.basicConfig(
 
 # default `log_dir` is "runs" - we'll be more specific here
 parser = argparse.ArgumentParser(description="DualNet-Image")
-parser.add_argument("--n_runs", type=int, default=5)
-parser.add_argument("--batch_size", type=int, default=32)
-parser.add_argument("--n_epochs", type=int, default=2)
-parser.add_argument("--lr", type=float, default=0.001)
-parser.add_argument("--ssl_lr", type=float, default=0.001)
-parser.add_argument("--seed", type=int, default=42)
+
 parser.add_argument("--path", type=str, default="./data/image_data.pickle")
+parser.add_argument(
+    "--save_path",
+    type=str,
+    default="results/",
+    help="save models at the end of training",
+)
+parser.add_argument("--device", type=str, default="cpu")
+parser.add_argument("--seed", type=int, default=42)
+
+parser.add_argument("--n_runs", type=int, default=5)
+parser.add_argument("--n_epochs", type=int, default=2)
+parser.add_argument("--inner_steps", type=int, default=1)
+parser.add_argument("--n_outer", type=int, default=1)
+
 parser.add_argument("--n_ways", type=int, default=5)
 parser.add_argument("--n_class", type=int, default=74)
 parser.add_argument("--n_tasks", type=int, default=14)
 parser.add_argument(
     "--n_memories", type=int, default=50, help="number of memories per task"
 )
+parser.add_argument("--xdim", type=tuple, default=(1, 20, 20), help="Input Dimensions")
+parser.add_argument("--ydim", type=tuple, default=(), help="Input Dimensions")
+
+
+parser.add_argument("--batch_size", type=int, default=32)
+parser.add_argument("--lr", type=float, default=0.001)
+parser.add_argument("--ssl_lr", type=float, default=0.001)
 parser.add_argument(
     "--memory_strength",
     default=1.0,
@@ -48,20 +64,12 @@ parser.add_argument(
     help="memory strength (meaning depends on memory)",
 )
 parser.add_argument("--reg", default=1.0, type=float)
-parser.add_argument("--inner_steps", type=int, default=1)
 parser.add_argument(
-    "--temperature", type=float, default=1.0, help="temperature for distilation"
+    "--temp", type=float, default=1.0, help="temperature for distilation"
 )
 parser.add_argument("--beta", type=float, default=0.3)
-parser.add_argument(
-    "--save_path",
-    type=str,
-    default="results/",
-    help="save models at the end of training",
-)
-parser.add_argument("--replay_batch_size", type=int, default=10)
-parser.add_argument("--n_outer", type=int, default=1)
-parser.add_argument("--device", type=str, default="cpu")
+
+
 args = parser.parse_args()
 
 # main code
@@ -117,10 +125,10 @@ if __name__ == "__main__":
                     if task > 0:
                         # logging.info("Claculating Mem Features for task {}".format(task))
                         offset1, offset2 = model.compute_offsets(task - 1)
-                        x = model.VCTransform(model.memx[task - 1])
+                        x = model.VCTransform(model.memory.memx[task - 1])
                         out = model(x, task - 1)
-                        model.mem_feat[task - 1] = F.softmax(
-                            out[:, offset1:offset2] / model.temp, dim=1
+                        model.memory.mem_feat[task - 1] = F.softmax(
+                            out[:, offset1:offset2] / args.temp, dim=1
                         ).data.clone()
                     for epoch in range(args.n_epochs):
                         logging.info("Epoch {}".format(epoch))
@@ -132,21 +140,22 @@ if __name__ == "__main__":
                             for i, (x, y) in inner:
                                 x, y = x.to(device), y.to(device)
                                 endcnt = min(
-                                    model.mem_cnt + args.batch_size, model.n_memories
+                                    model.memory.mem_cnt + args.batch_size,
+                                    model.memory.n_memories,
                                 )
-                                effbsz = endcnt - model.mem_cnt
+                                effbsz = endcnt - model.memory.mem_cnt
                                 if effbsz > x.size(0):
                                     effbsz = x.size(0)
-                                    endcnt = model.mem_cnt + effbsz
-                                model.memx[task, model.mem_cnt : endcnt].copy_(
-                                    x.data[:effbsz]
-                                )
-                                model.memy[task, model.mem_cnt : endcnt].copy_(
-                                    y.data[:effbsz]
-                                )
-                                model.mem_cnt += effbsz
-                                if model.mem_cnt == model.n_memories:
-                                    model.mem_cnt = 0
+                                    endcnt = model.memory.mem_cnt + effbsz
+                                model.memory.memx[
+                                    task, model.memory.mem_cnt : endcnt
+                                ].copy_(x.data[:effbsz])
+                                model.memory.memy[
+                                    task, model.memory.mem_cnt : endcnt
+                                ].copy_(y.data[:effbsz])
+                                model.memory.mem_cnt += effbsz
+                                if model.memory.mem_cnt == model.memory.n_memories:
+                                    model.memory.mem_cnt = 0
 
                                 for j in range(args.n_outer):
                                     weights_before = deepcopy(model.state_dict())
@@ -159,7 +168,7 @@ if __name__ == "__main__":
                                                 yy,
                                                 target,
                                                 mask,
-                                            ) = model.memory_consolidation(task)
+                                            ) = model.memory.consolidation(task)
                                             x1, x2 = model.barlow_augment(xx)
                                         else:
                                             x1, x2 = model.barlow_augment(x)
@@ -179,7 +188,7 @@ if __name__ == "__main__":
                                         name: weights_before[name]
                                         + (
                                             (weights_after[name] - weights_before[name])
-                                            * model.beta
+                                            * args.beta
                                         )
                                         for name in weights_before.keys()
                                     }
@@ -220,14 +229,14 @@ if __name__ == "__main__":
                                             yy,
                                             target,
                                             mask,
-                                        ) = model.memory_consolidation(task)
+                                        ) = model.memory.consolidation(task)
                                         xx = model.VCTransform(xx)
                                         pred = torch.gather(
                                             model(xx, task=None, fast=True), 1, mask
                                         )
                                         loss2 += CLoss(pred, yy)
-                                        loss3 = model.reg * KLLoss(
-                                            F.log_softmax(pred / model.temp, dim=1),
+                                        loss3 = args.reg * KLLoss(
+                                            F.log_softmax(pred / args.temp, dim=1),
                                             target,
                                         )
                                     loss = loss1 + loss2 + loss3
