@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 from learn2learn.data import TaskDataset
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 # import custom libraries
 from dn.data import ContinousNWays, ImageData, ImageDataDS, MetaLoader, MyDS
