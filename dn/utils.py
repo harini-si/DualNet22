@@ -26,6 +26,17 @@ def load_image_data_pickle(path):
     return data
 
 
+def checkpoint(run, model, optimizer, ssl_optimizer, args):
+    """
+    Save model and optimizer state to file.
+    """
+    torch.save(model.state_dict(), "{}/model_{}.pth".format(args.save_path, run))
+    torch.save(optimizer.state_dict(), "{}/optimizer_{}.pth".format(args.save_path, run))
+    torch.save(
+        ssl_optimizer.state_dict(), "{}/ssl_optimizer_{}.pth".format(args.save_path, run)
+    )
+
+
 class Metrics:
     def __init__(self, args):
         self.args = args

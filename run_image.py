@@ -15,7 +15,7 @@ from tqdm import tqdm
 # import custom libraries
 from dn.data import ContinousNWays, ImageData, ImageDataDS, MetaLoader, MyDS
 from dn.models import DualNet
-from dn.utils import Metrics, deterministic, load_image_data_pickle
+from dn.utils import Metrics, checkpoint, deterministic, load_image_data_pickle
 
 # set logging
 logging.basicConfig(
@@ -263,5 +263,6 @@ if __name__ == "__main__":
                             acc = correct / (len(data) * len(te_loader))
                             metrics.update_metric(run, task, task_t, acc)
                             logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
+            checkpoint(run, model, opt, ssl_opt, args)
     print(metrics)
     metrics.plot()
