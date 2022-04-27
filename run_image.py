@@ -116,10 +116,10 @@ if __name__ == "__main__":
                     model.train()
                     if task > 0:
                         # logging.info("Claculating Mem Features for task {}".format(task))
-                        offset1, offset2 = model.compute_offsets(task)
-                        x = model.VCTransform(model.memx[task])
-                        out = model(x, task)
-                        model.mem_feat[task] = F.softmax(
+                        offset1, offset2 = model.compute_offsets(task - 1)
+                        x = model.VCTransform(model.memx[task - 1])
+                        out = model(x, task - 1)
+                        model.mem_feat[task - 1] = F.softmax(
                             out[:, offset1:offset2] / model.temp, dim=1
                         ).data.clone()
                     for epoch in range(args.n_epochs):
