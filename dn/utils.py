@@ -39,13 +39,19 @@ def checkpoint(run, model, optimizer, ssl_optimizer, args):
         "{}/ssl_optimizer_{}.pth".format(args.save_path, run),
     )
 
+
 def load_checkpoint(run, model, optimizer, ssl_optimizer, args):
     """
     Load model and optimizer state from file.
     """
     model.load_state_dict(torch.load("{}/model_{}.pth".format(args.save_path, run)))
-    optimizer.load_state_dict(torch.load("{}/optimizer_{}.pth".format(args.save_path, run)))
-    ssl_optimizer.load_state_dict(torch.load("{}/ssl_optimizer_{}.pth".format(args.save_path, run)))
+    optimizer.load_state_dict(
+        torch.load("{}/optimizer_{}.pth".format(args.save_path, run))
+    )
+    ssl_optimizer.load_state_dict(
+        torch.load("{}/ssl_optimizer_{}.pth".format(args.save_path, run))
+    )
+
 
 class VCMetrics:
     def __init__(self, args):

@@ -70,6 +70,7 @@ parser.add_argument(
 parser.add_argument("--beta", type=float, default=0.3)
 parser.add_argument("--mixup_prob", type=float, default=0.3)
 parser.add_argument("--mixup_alpha", type=float, default=0.2)
+parser.add_argument("--ssl_loss", type=str, default="BarlowTwins")
 
 args = parser.parse_args()
 

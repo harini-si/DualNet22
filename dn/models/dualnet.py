@@ -110,7 +110,7 @@ class SlowLearner(torch.nn.Module):
         self.args = args
         self.embedder = embedder(args)
 
-    def forward(self, input, type="BarlowTwins", return_feat=False):
+    def forward(self, input, return_feat=False):
         """
         Obtain representation from slow learner
         """
@@ -125,9 +125,9 @@ class SlowLearner(torch.nn.Module):
             emb = (emb - emb.mean(0)) / emb.std(0)
             emb_ = (emb_ - emb_.mean(0)) / emb_.std(0)
 
-            if type == "BarlowTwins":
+            if args.ssl_loss == "BarlowTwins":
                 return self.barlow_twins_losser(emb, emb_)
-            elif type == "SimCLR":
+            elif args.ssl_loss == "SimCLR":
                 return self.SimCLR_losser(emb, emb_)
             else:
                 raise NotImplementedError

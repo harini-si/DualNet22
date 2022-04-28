@@ -62,6 +62,7 @@ parser.add_argument(
     "--temp", type=float, default=1.0, help="temperature for distilation"
 )
 parser.add_argument("--beta", type=float, default=0.3)
+parser.add_argument("--ssl_loss", type=str, default="BarlowTwins")
 args = parser.parse_args()
 
 args.xdim = (args.seq_len, args.input_dim)

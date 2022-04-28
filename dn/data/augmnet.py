@@ -55,7 +55,7 @@ class Corrupt:
     def __init__(self, args, p=0.2):
         self.p = p
         self.device = args.device
-        
+
     def __call__(self, x):
         x_ = x.clone()
         rand = torch.rand(x_.size()).to(self.device)
