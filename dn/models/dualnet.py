@@ -71,7 +71,7 @@ class DualNetMarket(torch.nn.Module):
         self.FastLearner = FastLearner(args, LSTMFast)
 
         # Transforms
-        self.barlow_augment = Corrupt()
+        self.barlow_augment = Corrupt(self.args)
 
     def forward(self, stock) -> torch.Tensor:
         """
