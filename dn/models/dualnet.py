@@ -125,9 +125,9 @@ class SlowLearner(torch.nn.Module):
             emb = (emb - emb.mean(0)) / emb.std(0)
             emb_ = (emb_ - emb_.mean(0)) / emb_.std(0)
 
-            if args.ssl_loss == "BarlowTwins":
+            if self.args.ssl_loss == "BarlowTwins":
                 return self.barlow_twins_losser(emb, emb_)
-            elif args.ssl_loss == "SimCLR":
+            elif self.args.ssl_loss == "SimCLR":
                 return self.SimCLR_losser(emb, emb_)
             else:
                 raise NotImplementedError
