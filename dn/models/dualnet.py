@@ -3,32 +3,29 @@ import math
 import torch
 from torch import nn
 
-from dn.data import BarlowAugment, VCTransform
-from dn.models.extractor import VCResNetFast, VCResNetSlow
+from dn.data import BarlowAugment, Corrupt, VCTransform
+from dn.models.extractor import LSTMFast, LSTMSlow, VCResNetFast, VCResNetSlow
 from dn.models.memory import Memory
 
-SLOW_EMBEDDER = VCResNetSlow
-FAST_EMBEDDER = VCResNetFast
 
-
-class DualNet(torch.nn.Module):
+class DualNetVC(torch.nn.Module):
     """
     Takes Slow, fast learners and implements dualnet
     """
 
     def __init__(self, args):
         # setup network
-        super(DualNet, self).__init__()
+        super(DualNetVC, self).__init__()
         self.args = args
         self.n_class = args.n_class
         self.nc_per_task = int(args.n_class // args.n_tasks)
 
         # setup memories
-        self.memory = Memory(args, self.nc_per_task, self.compute_offsets)
+        self.memory = Memory(args, (self.nc_per_task,), self.compute_offsets)
 
         # setup learners
-        self.SlowLearner = SlowLearner(args)
-        self.FastLearner = FastLearner(args)
+        self.SlowLearner = SlowLearner(args, VCResNetSlow)
+        self.FastLearner = FastLearner(args, VCResNetFast)
 
         # Transforms
         self.VCTransform = VCTransform
@@ -55,15 +52,45 @@ class DualNet(torch.nn.Module):
         return out
 
 
+class DualNetMarket(torch.nn.Module):
+    """
+    Takes Slow, fast learners and implements dualnet
+    """
+
+    def __init__(self, args):
+        # setup network
+        super(DualNetMarket, self).__init__()
+        self.args = args
+        self.n_class = args.n_class
+
+        # setup memories
+        self.memory = Memory(args, (args.out_dim, args.n_class), self.compute_offsets)
+
+        # setup learners
+        self.SlowLearner = SlowLearner(args, LSTMSlow)
+        self.FastLearner = FastLearner(args, LSTMFast)
+
+        # Transforms
+        self.barlow_augment = Corrupt()
+
+    def forward(self, stock) -> torch.Tensor:
+        """
+        Fast Learner Inference
+        """
+        feat = self.SlowLearner(stock, return_feat=True)
+        out = self.FastLearner(stock, feat)
+        return out
+
+
 class FastLearner(torch.nn.Module):
     """
     Fast Learner Takes image input and returns meta task output
     """
 
-    def __init__(self, args):
+    def __init__(self, args, embedder):
         super(FastLearner, self).__init__()
         self.args = args
-        self.embedder = FAST_EMBEDDER(args)
+        self.embedder = embedder(args)
 
     def forward(self, img, feat) -> torch.Tensor:
         """
@@ -78,13 +105,12 @@ class SlowLearner(torch.nn.Module):
     Slow Learner Takes two images input and returns representation
     """
 
-    def __init__(self, args):
+    def __init__(self, args, embedder):
         super(SlowLearner, self).__init__()
         self.args = args
-        self.embedder = SLOW_EMBEDDER(args)
-        self.augmenter = BarlowAugment()
+        self.embedder = embedder(args)
 
-    def forward(self, input, type="BarlowTwins", return_feat=False) -> torch.Tensor:
+    def forward(self, input, type="BarlowTwins", return_feat=False):
         """
         Obtain representation from slow learner
         """

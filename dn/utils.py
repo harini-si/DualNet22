@@ -40,7 +40,7 @@ def checkpoint(run, model, optimizer, ssl_optimizer, args):
     )
 
 
-class Metrics:
+class VCMetrics:
     def __init__(self, args):
         self.args = args
         self.accs = np.zeros((self.args.n_runs, self.args.n_tasks, self.args.n_tasks))

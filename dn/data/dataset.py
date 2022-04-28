@@ -55,8 +55,8 @@ class MetaLoader(object):
 
 
 class MarketTaskset:
-    def __init__(self, csv, args, maxSym=15, maxDay=15, split="Train") -> None:
-        df = pd.read_csv(csv)
+    def __init__(self, args, maxSym=15, maxDay=15, split="Train") -> None:
+        df = pd.read_csv(args.path)
         df.interpolate(axis=1, method="linear", inplace=True)
         df = df[(df["sym"] < maxSym) & (df["day"] < maxDay)]
         if split == "Train":

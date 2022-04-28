@@ -14,8 +14,8 @@ from tqdm import tqdm
 
 # import custom libraries
 from dn.data import ContinousNWays, ImageData, MetaLoader, Mixup, MyDS
-from dn.models import DualNet
-from dn.utils import Metrics, checkpoint, deterministic, load_image_data_pickle
+from dn.models import DualNetVC as DualNet
+from dn.utils import VCMetrics, checkpoint, deterministic, load_image_data_pickle
 
 # set logging
 logging.basicConfig(
@@ -52,7 +52,7 @@ parser.add_argument(
 )
 parser.add_argument("--xdim", type=tuple, default=(1, 20, 20), help="Input Dimensions")
 parser.add_argument("--ydim", type=tuple, default=(), help="Input Dimensions")
-
+parser.add_argument("--offsets", type=bool, default=True)
 
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--lr", type=float, default=0.001)
@@ -75,7 +75,7 @@ args = parser.parse_args()
 
 # main code
 if __name__ == "__main__":
-    metrics = Metrics(args)
+    metrics = VCMetrics(args)
     mixup = Mixup(args)
     data = load_image_data_pickle(args.path)
     device = torch.device(args.device)  # use device specified in args
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     ) as pbar:
         for run in pbar:
             logging.info("Run {}".format(run))
-            writer = SummaryWriter(f"{args.save_path}/test_MCL_{time.time()}")
+            writer = SummaryWriter(f"{args.save_path}/test_VC_{time.time()}")
             deterministic(args.seed + run)
 
             # create model and losses

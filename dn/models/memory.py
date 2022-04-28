@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 
@@ -16,20 +17,30 @@ class Memory:
             args.device
         )
         self.mem_feat = torch.FloatTensor(
-            args.n_tasks, self.n_memories, self.nc_per_task
+            args.n_tasks, self.n_memories, *self.nc_per_task
         ).to(args.device)
         self.bsz = args.batch_size
 
     def consolidation(self, task):
         t = torch.randint(0, task, (self.bsz,))
         x = torch.randint(0, self.n_memories, (self.bsz,))
-        offsets = torch.tensor([self.compute_offsets(i) for i in t])
         xx = self.memx[t, x]
-        yy = self.memy[t, x] - offsets[:, 0].to(self.args.device)
         feat = self.mem_feat[t, x]
+        yy = self.memy[t, x]
         mask = torch.zeros(self.bsz, self.nc_per_task)
+
+        if self.args.offsets:
+            offsets = torch.tensor([self.compute_offsets(i) for i in t])
+            yy -= offsets[:, 0].to(self.args.device)
+
         for j in range(self.bsz):
-            mask[j] = torch.arange(offsets[j][0], offsets[j][1])
+            if self.args.offsets:
+                mask[j] = torch.arange(offsets[j][0], offsets[j][1])
+            else:
+                mask[j] = torch.stack(
+                    self.args.out_dim * [torch.arange(self.args.n_class)]
+                )
+
         return (
             xx.to(self.args.device),
             yy.to(self.args.device),
@@ -38,11 +49,18 @@ class Memory:
         )
 
     def features_init(self, model, task):
-        offset1, offset2 = model.compute_offsets(task)
-        x = model.VCTransform(self.memx[task])
+        x = self.memx[task]
+        s_ = np.s_[:]
+
+        if self.args.offsets:
+            offset1, offset2 = model.compute_offsets(task)
+            x = model.VCTransform(x)
+            s_ = s_[:, offset1:offset2]
+
         out = model(x, task)
+
         self.mem_feat[task] = torch.nn.functional.softmax(
-            out[:, offset1:offset2] / self.args.temp, dim=1
+            out[s_] / model.temp, dim=1
         ).data.clone()
 
     def update(self, x, y, task):
