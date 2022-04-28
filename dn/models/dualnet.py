@@ -64,7 +64,7 @@ class DualNetMarket(torch.nn.Module):
         self.n_class = args.n_class
 
         # setup memories
-        self.memory = Memory(args, (args.out_dim, args.n_class), self.compute_offsets)
+        self.memory = Memory(args, (args.out_dim, args.n_class), None)
 
         # setup learners
         self.SlowLearner = SlowLearner(args, LSTMSlow)

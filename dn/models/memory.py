@@ -27,7 +27,7 @@ class Memory:
         xx = self.memx[t, x]
         feat = self.mem_feat[t, x]
         yy = self.memy[t, x]
-        mask = torch.zeros(self.bsz, self.nc_per_task)
+        mask = torch.zeros(self.bsz, *self.nc_per_task)
 
         if self.args.offsets:
             offsets = torch.tensor([self.compute_offsets(i) for i in t])
@@ -55,12 +55,13 @@ class Memory:
         if self.args.offsets:
             offset1, offset2 = model.compute_offsets(task)
             x = model.VCTransform(x)
-            s_ = s_[:, offset1:offset2]
-
-        out = model(x, task)
+            s_ = np.s_[:, offset1:offset2]
+            out = model(x, task)
+        else:
+            out = model(x)
 
         self.mem_feat[task] = torch.nn.functional.softmax(
-            out[s_] / model.temp, dim=1
+            out[s_] / self.args.temp, dim=1
         ).data.clone()
 
     def update(self, x, y, task):

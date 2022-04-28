@@ -3,6 +3,7 @@ import logging
 import time
 from copy import deepcopy
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
@@ -44,6 +45,7 @@ parser.add_argument(
 parser.add_argument("--seq_len", type=int, default=5)
 parser.add_argument("--hidden_dim", type=int, default=64)
 parser.add_argument("--input_dim", type=int, default=28)
+parser.add_argument("--out_dim", type=int, default=4)
 parser.add_argument("--offsets", type=bool, default=False)
 
 parser.add_argument("--batch_size", type=int, default=32)
@@ -60,11 +62,10 @@ parser.add_argument(
     "--temp", type=float, default=1.0, help="temperature for distilation"
 )
 parser.add_argument("--beta", type=float, default=0.3)
-parser.add_argument("--device", type=str, default="cpu")
 args = parser.parse_args()
 
 args.xdim = (args.seq_len, args.input_dim)
-args.ydim = args.out_dim
+args.ydim = (args.out_dim,)
 
 if __name__ == "__main__":
     metrics = VCMetrics(args)
@@ -122,9 +123,9 @@ if __name__ == "__main__":
                                                 target,
                                                 mask,
                                             ) = model.memory.consolidation(task)
-                                            x1, x2 = model.augment(xx)
+                                            x1, x2 = model.barlow_augment(xx)
                                         else:
-                                            x1, x2 = model.augment(x)
+                                            x1, x2 = model.barlow_augment(x)
                                         SSLLoss = model.SlowLearner((x1, x2))
                                         SSLLoss.backward()
                                         ssl_opt.step()
@@ -220,12 +221,17 @@ if __name__ == "__main__":
                             correct, total = 0, 0
                             for data, target in te_loader:
                                 data, target = data.to(device), target.to(device)
-                                logits = model(data, task_t)
+                                logits = model(data)
                                 correct += torch.sum(
                                     torch.argmax(logits, dim=1) == target
                                 )
                                 total += target.size(0) * target.size(-1)
-                            acc = correct / total
+
+                            try:
+                                acc = correct / total
+                            except ZeroDivisionError:
+                                acc = np.nan
+                                logging.info(f"Task {task_t} has 0 samples")
                             metrics.update_metric(run, task, task_t, acc)
                             logging.info("Task {} Acc: {:.4f}".format(task_t, acc))
             checkpoint(run, model, opt, ssl_opt, args)
