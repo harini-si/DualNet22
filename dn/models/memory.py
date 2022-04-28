@@ -38,10 +38,12 @@ class Memory:
         )
 
     def features_init(self, model, task):
-        offset1, offset2 = model.compute_offsets(task - 1)
-        x = model.VCTransform(self.memx[task - 1])
-        out = model(x, task - 1)
-        self.mem_feat[task - 1] = torch.nn.functional.softmax(
+        offset1, offset2 = model.compute_offsets(task)
+        x = model.VCTransform(self.memx[task])
+        out = model(x, task)
+        print(out.size())
+        print(offset1, offset2)
+        self.mem_feat[task] = torch.nn.functional.softmax(
             out[:, offset1:offset2] / self.args.temp, dim=1
         ).data.clone()
 
