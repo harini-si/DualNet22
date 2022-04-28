@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch import nn
 
@@ -7,68 +9,6 @@ from dn.models.memory import Memory
 
 SLOW_EMBEDDER = VCResNetSlow
 FAST_EMBEDDER = VCResNetFast
-
-
-class SlowLearner(torch.nn.Module):
-    """
-    Slow Learner Takes two images input and returns representation
-    """
-
-    def __init__(self, args):
-        super(SlowLearner, self).__init__()
-        self.args = args
-        self.embedder = SLOW_EMBEDDER(args)
-        self.augmenter = BarlowAugment()
-
-    def forward(self, input, type="BarlowTwins", return_feat=False) -> torch.Tensor:
-        """
-        Obtain representation from slow learner
-        """
-        if return_feat:
-            feat = self.embedder(input, return_feat=True)
-            return feat
-
-        else:
-            emb, emb_ = self.embedder(input[0], return_feat=False), self.embedder(
-                input[1], return_feat=False
-            )
-            if type == "BarlowTwins":
-                return self.barlow_twins_losser(emb, emb_)
-            else:
-                raise NotImplementedError
-
-    def barlow_twins_losser(self, z1, z2):
-        """
-        Input: z1, z2 embeddings
-        Returns loss by barlo twins method
-        """
-        z_a = (z1 - z1.mean(0)) / z1.std(0)
-        z_b = (z2 - z2.mean(0)) / z2.std(0)
-        N, D = z_a.size(0), z_a.size(1)
-        c_ = torch.mm(z_a.T, z_b) / N
-        diag = torch.eye(D).to(self.args.device)
-        c_diff = (c_ - diag).pow(2)
-        c_diff[~torch.eye(D, dtype=bool)] *= 2e-3
-        loss = c_diff.sum()
-        return loss
-
-
-class FastLearner(torch.nn.Module):
-    """
-    Fast Learner Takes image input and returns meta task output
-    """
-
-    def __init__(self, args):
-        super(FastLearner, self).__init__()
-        self.args = args
-        self.embedder = FAST_EMBEDDER(args)
-
-    def forward(self, img, feat) -> torch.Tensor:
-        """
-        Obtain representation from slow learner
-        """
-        out = self.embedder(img, feat)
-        return out
 
 
 class DualNet(torch.nn.Module):
@@ -113,3 +53,82 @@ class DualNet(torch.nn.Module):
             out[:, int(offset2) : self.n_class].data.fill_(-10e10)
 
         return out
+
+
+class FastLearner(torch.nn.Module):
+    """
+    Fast Learner Takes image input and returns meta task output
+    """
+
+    def __init__(self, args):
+        super(FastLearner, self).__init__()
+        self.args = args
+        self.embedder = FAST_EMBEDDER(args)
+
+    def forward(self, img, feat) -> torch.Tensor:
+        """
+        Obtain representation from slow learner
+        """
+        out = self.embedder(img, feat)
+        return out
+
+
+class SlowLearner(torch.nn.Module):
+    """
+    Slow Learner Takes two images input and returns representation
+    """
+
+    def __init__(self, args):
+        super(SlowLearner, self).__init__()
+        self.args = args
+        self.embedder = SLOW_EMBEDDER(args)
+        self.augmenter = BarlowAugment()
+
+    def forward(self, input, type="BarlowTwins", return_feat=False) -> torch.Tensor:
+        """
+        Obtain representation from slow learner
+        """
+        if return_feat:
+            feat = self.embedder(input, return_feat=True)
+            return feat
+
+        else:
+            emb, emb_ = self.embedder(input[0], return_feat=False), self.embedder(
+                input[1], return_feat=False
+            )
+            emb = (emb - emb.mean(0)) / emb.std(0)
+            emb_ = (emb_ - emb_.mean(0)) / emb_.std(0)
+
+            if type == "BarlowTwins":
+                return self.barlow_twins_losser(emb, emb_)
+            elif type == "SimCLR":
+                return self.SimCLR_losser(emb, emb_)
+            else:
+                raise NotImplementedError
+
+    def barlow_twins_losser(self, z1, z2):
+        """
+        Input: z1, z2 embeddings
+        Returns loss by barlo twins method
+        """
+        N, D = z1.size(0), z1.size(1)
+        c_ = torch.mm(z1.T, z2) / N
+        diag = torch.eye(D).to(self.args.device)
+        c_diff = (c_ - diag).pow(2)
+        c_diff[~torch.eye(D, dtype=bool)] *= 2e-3
+        loss = c_diff.sum()
+        return loss
+
+    def SimCLR_losser(self, z1, z2, temp=100, eps=1e-6):
+        out = torch.cat([z1, z2], dim=0)
+        cov = torch.mm(out, out.t().contiguous())
+        sim = torch.exp(cov / temp)
+        neg = sim.sum(dim=1)
+
+        row_sub = torch.Tensor(neg.shape).fill_(math.e ** (1 / temp)).cuda()
+        neg = torch.clamp(neg - row_sub, min=eps)
+        pos = torch.exp(torch.sum(z1 * z2, dim=-1) / temp)
+        pos = torch.cat([pos, pos], dim=0)
+
+        loss = -torch.log(pos / (neg + eps)).mean()
+        return loss

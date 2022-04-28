@@ -41,8 +41,6 @@ class Memory:
         offset1, offset2 = model.compute_offsets(task)
         x = model.VCTransform(self.memx[task])
         out = model(x, task)
-        print(out.size())
-        print(offset1, offset2)
         self.mem_feat[task] = torch.nn.functional.softmax(
             out[:, offset1:offset2] / self.args.temp, dim=1
         ).data.clone()
