@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 # import custom libraries
-from dn.data import ContinousNWays, ImageData, ImageDataDS, MetaLoader, MyDS
+from dn.data import ContinousNWays, ImageData, MetaLoader, Mixup, MyDS
 from dn.models import DualNet
 from dn.utils import Metrics, checkpoint, deterministic, load_image_data_pickle
 
@@ -68,13 +68,36 @@ parser.add_argument(
     "--temp", type=float, default=1.0, help="temperature for distilation"
 )
 parser.add_argument("--beta", type=float, default=0.3)
-
+parser.add_argument("--mixup_prob", type=float, default=0.3)
+parser.add_argument("--mixup_alpha", type=float, default=0.2)
 
 args = parser.parse_args()
 
 # main code
 if __name__ == "__main__":
     metrics = Metrics(args)
+    mixup = Mixup(args)
+    data = load_image_data_pickle(args.path)
+    device = torch.device(args.device)  # use device specified in args
+    train_data, test_data = MyDS(data.train_ds.samples, data.train_ds.labels), MyDS(
+        data.test_ds.samples, data.test_ds.labels
+    )
+    train_data, test_data = l2l.data.MetaDataset(train_data), l2l.data.MetaDataset(
+        test_data
+    )
+    logging.info("data loaded")
+
+    transforms = [
+        ContinousNWays(train_data, args.n_ways, args),
+        l2l.data.transforms.LoadData(train_data),
+    ]
+    train_taskset = TaskDataset(
+        train_data, transforms, num_tasks=args.n_class // args.n_ways
+    )
+    test_taskset = TaskDataset(
+        test_data, transforms, num_tasks=args.n_class // args.n_ways
+    )
+
     with tqdm(
         range(args.n_runs), desc="Runs Loop", leave=False, position=0, total=args.n_runs
     ) as pbar:
@@ -82,27 +105,6 @@ if __name__ == "__main__":
             logging.info("Run {}".format(run))
             writer = SummaryWriter(f"{args.save_path}/test_MCL_{time.time()}")
             deterministic(args.seed + run)
-            device = torch.device(args.device)  # use device specified in args
-
-            data = load_image_data_pickle(args.path)
-            train_data, test_data = ImageDataDS(
-                data.train_ds, transform=None
-            ), ImageDataDS(data.test_ds)
-            train_data, test_data = l2l.data.MetaDataset(
-                train_data
-            ), l2l.data.MetaDataset(test_data)
-            logging.info("data loaded")
-
-            transforms = [
-                ContinousNWays(train_data, args.n_ways, args),
-                l2l.data.transforms.LoadData(train_data),
-            ]
-            train_taskset = TaskDataset(
-                train_data, transforms, num_tasks=args.n_class // args.n_ways
-            )
-            test_taskset = TaskDataset(
-                test_data, transforms, num_tasks=args.n_class // args.n_ways
-            )
 
             # create model and losses
             model = DualNet(args).to(device)
@@ -123,13 +125,8 @@ if __name__ == "__main__":
                     logging.info("Running Task {}".format(task))
                     model.train()
                     if task > 0:
-                        # logging.info("Claculating Mem Features for task {}".format(task))
-                        offset1, offset2 = model.compute_offsets(task - 1)
-                        x = model.VCTransform(model.memory.memx[task - 1])
-                        out = model(x, task - 1)
-                        model.memory.mem_feat[task - 1] = F.softmax(
-                            out[:, offset1:offset2] / args.temp, dim=1
-                        ).data.clone()
+                        model.memory.features_init(model, task - 1)
+
                     for epoch in range(args.n_epochs):
                         logging.info("Epoch {}".format(epoch))
                         with tqdm(
@@ -139,23 +136,7 @@ if __name__ == "__main__":
                         ) as inner:
                             for i, (x, y) in inner:
                                 x, y = x.to(device), y.to(device)
-                                endcnt = min(
-                                    model.memory.mem_cnt + args.batch_size,
-                                    model.memory.n_memories,
-                                )
-                                effbsz = endcnt - model.memory.mem_cnt
-                                if effbsz > x.size(0):
-                                    effbsz = x.size(0)
-                                    endcnt = model.memory.mem_cnt + effbsz
-                                model.memory.memx[
-                                    task, model.memory.mem_cnt : endcnt
-                                ].copy_(x.data[:effbsz])
-                                model.memory.memy[
-                                    task, model.memory.mem_cnt : endcnt
-                                ].copy_(y.data[:effbsz])
-                                model.memory.mem_cnt += effbsz
-                                if model.memory.mem_cnt == model.memory.n_memories:
-                                    model.memory.mem_cnt = 0
+                                model.memory.update(x, y, task)
 
                                 for j in range(args.n_outer):
                                     weights_before = deepcopy(model.state_dict())
@@ -193,28 +174,15 @@ if __name__ == "__main__":
                                         for name in weights_before.keys()
                                     }
                                     model.load_state_dict(new_params)
-                                running_loss = 0
-                                running_loss1 = 0
                                 correct = 0
                                 total = 0
                                 for inner in range(args.inner_steps):
                                     model.zero_grad()
                                     x = model.VCTransform(x)
                                     offset1, offset2 = model.compute_offsets(task)
+                                    x, y = mixup(x, y - offset1)
                                     pred = model(x, task)
-                                    loss1 = CLoss(pred[:, offset1:offset2], y - offset1)
-                                    correct += torch.sum(
-                                        torch.argmax(pred[:, offset1:offset2], dim=1)
-                                        == y - offset1
-                                    )
-                                    total += y.size(0)
-                                    writer.add_scalar(
-                                        "training acc",
-                                        correct.item() / total,
-                                        (epoch * len(train_loader) + i)
-                                        * args.inner_steps
-                                        + inner,
-                                    )
+                                    loss1 = CLoss(pred[:, offset1:offset2], y)
                                     writer.add_scalar(
                                         "training loss",
                                         loss1.item(),

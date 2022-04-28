@@ -36,3 +36,26 @@ class Memory:
             feat.to(self.args.device),
             mask.long().to(self.args.device),
         )
+
+    def features_init(self, model, task):
+        offset1, offset2 = model.compute_offsets(task - 1)
+        x = model.VCTransform(self.memx[task - 1])
+        out = model(x, task - 1)
+        self.mem_feat[task - 1] = torch.nn.functional.softmax(
+            out[:, offset1:offset2] / self.args.temp, dim=1
+        ).data.clone()
+
+    def update(self, x, y, task):
+        endcnt = min(
+            self.mem_cnt + self.args.batch_size,
+            self.n_memories,
+        )
+        effbsz = endcnt - self.mem_cnt
+        if effbsz > x.size(0):
+            effbsz = x.size(0)
+            endcnt = self.mem_cnt + effbsz
+        self.memx[task, self.mem_cnt : endcnt].copy_(x.data[:effbsz])
+        self.memy[task, self.mem_cnt : endcnt].copy_(y.data[:effbsz])
+        self.mem_cnt += effbsz
+        if self.mem_cnt == self.n_memories:
+            self.mem_cnt = 0
