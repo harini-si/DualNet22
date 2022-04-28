@@ -77,7 +77,7 @@ if __name__ == "__main__":
     ) as pbar:
         for run in pbar:
             logging.info("Run {}".format(run))
-            writer = SummaryWriter(f"{args.save_path}/test_VC_{time.time()}")
+            writer = SummaryWriter(f"{args.save_path}/test_MCL_{time.time()}")
             deterministic(args.seed + run)
 
             # create model and losses
