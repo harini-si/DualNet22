@@ -72,6 +72,7 @@ if __name__ == "__main__":
     metrics = VCMetrics(args)
     device = torch.device(args.device)
     train_taskset, test_taskset = MarketTaskset(args), MarketTaskset(args, split="Test")
+    metrics.accs = np.zeros(args.n_runs, len(train_taskset), len(test_taskset))
     with tqdm(
         range(args.n_runs), desc="Runs Loop", leave=False, position=0, total=args.n_runs
     ) as pbar:
@@ -217,8 +218,6 @@ if __name__ == "__main__":
                         position=0,
                     ) as inner:
                         for task_t, te_loader in inner:
-                            if task_t > task:
-                                break
                             correct, total = 0, 0
                             for data, target in te_loader:
                                 data, target = data.to(device), target.to(device)
