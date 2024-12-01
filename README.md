@@ -2,10 +2,6 @@
 
 This repository contains project submission for the course [Meta Learning](https://sites.google.com/view/meta-learning3/home) at [BITS Goa](https://www.bits-pilani.ac.in/goa/) (conducted by [TCS Research](https://www.tcs.com/tcs-research) & [BITS Goa](https://www.bits-pilani.ac.in/goa/)).
 
-Contributors: 
-
-1. [S I Harini](https://github.com/harini-si)
-2. [Arihant Bansal](https://github.com/arihantbansal)
 
 This project contains the implementation of the following NeurIPS 2021 paper:
 
